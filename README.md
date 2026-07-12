@@ -94,11 +94,13 @@ it) with `--env-file path/to/other.env`.
 
 A minimal Streamlit app (`medqa_multiagent/ui/app.py`) for manually
 testing/demoing the pipeline: type/paste a question stem and its A-D
-options, pick a variant (only ever the ones `entrypoint.SUPPORTED_VARIANTS`
-currently reports as implemented) and a config file, and see the predicted
-answer, explanation, invalid-response flag, and per-agent trace returned by
-the same black-box `answer_question` entrypoint the CLI calls. There's no
-test-set access anywhere in this UI -- only ad hoc questions you type in.
+options (or load a random one from the dev pool as a shortcut), pick a
+variant (only ever the ones `entrypoint.SUPPORTED_VARIANTS` currently
+reports as implemented) and a config file, and see the predicted answer,
+explanation, invalid-response flag, and per-agent trace returned by the
+same black-box `answer_question` entrypoint the CLI calls. There's no
+official test-set access anywhere in this UI -- `data/test.jsonl` is never
+read.
 
 ### Step by step
 
@@ -148,11 +150,17 @@ test-set access anywhere in this UI -- only ad hoc questions you type in.
    offered -- just `V0` for now).
 
 6. **Type/paste a question stem** and fill in all four options (A-D) in
-   the main panel. This is always an ad hoc question you type in -- the UI
-   never samples from `data/dev.jsonl`/`data/test.jsonl`.
+   the main panel, or click "🎲 Load random example" to fill them in
+   automatically from a random question in `data/dev.jsonl` (a typing
+   shortcut only -- edit the fields afterwards if you like). The official
+   test split (`data/test.jsonl`) is never read by this UI. When a loaded
+   example is showing unedited, an info box displays that question's
+   dataset-recorded expected answer.
 
 7. **Click "Get answer"**. On success you'll see:
-   - the predicted answer letter,
+   - the predicted answer letter (shown side by side with the dataset's
+     expected answer, plus a match/mismatch note, if you're still looking
+     at an unedited loaded example),
    - a warning banner if the response didn't parse to exactly one valid
      option letter,
    - the explanation text,

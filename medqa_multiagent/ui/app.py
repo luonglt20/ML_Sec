@@ -9,7 +9,10 @@ response flag, and -- when present -- the per-agent trace.
 
 UI-only: adds no new answer-producing logic beyond what the CLI already
 calls, and has no test-set access anywhere -- only ad hoc questions typed
-in by the user. Reuses the exact same LLM client stack as the CLI
+in by the user, or (via the optional "Load random example" button) an
+example pulled from the local *dev* pool (`data/dev.jsonl`) purely as a
+typing shortcut. The official test split (`data/test.jsonl`) is never
+read by this UI. Reuses the exact same LLM client stack as the CLI
 (`client_factory.build_llm_client`, i.e. `create_llm_client` +
 `OnDiskLLMCache` + `LoggingLLMClient`), so demo runs are cached exactly like
 CLI runs.
@@ -21,7 +24,8 @@ Run with:
 
 from __future__ import annotations
 
-from typing import Any
+import random
+from typing import Any, List
 
 import streamlit as st
 
@@ -31,11 +35,75 @@ import streamlit as st
 # The package must be installed (e.g. `pip install -e .`) for these to
 # resolve.
 from medqa_multiagent.client_factory import DEFAULT_CACHE_DIR
+from medqa_multiagent.data import Question, load_questions
 from medqa_multiagent.entrypoint import SUPPORTED_VARIANTS
 from medqa_multiagent.env_file import load_env_file
 from medqa_multiagent.ui.logic import DEFAULT_CONFIG_PATH, OPTION_LETTERS, get_answer, load_config
 
 DEFAULT_ENV_FILE = ".env"
+
+#: Deliberately the *dev* pool, never `data/test.jsonl` -- the "Load random
+#: example" button is a typing shortcut for ad hoc manual testing, not a
+#: sampled dev/test evaluation pass, so it must never touch the official
+#: test split.
+DEFAULT_EXAMPLE_DATA_PATH = "data/dev.jsonl"
+
+_EXAMPLE_ERROR_KEY = "_example_load_error"
+_EXAMPLE_QUESTION_ID_KEY = "_example_question_id"
+_EXAMPLE_ANSWER_KEY = "_example_expected_answer"
+_EXAMPLE_LOADED_QUESTION_KEY = "_example_loaded_question"
+_EXAMPLE_LOADED_OPTIONS_KEY = "_example_loaded_options"
+
+
+@st.cache_data(show_spinner=False)
+def _load_question_pool(data_path: str) -> List[Question]:
+    return load_questions(data_path)
+
+
+def _load_random_example(data_path: str) -> None:
+    """Populate the question/option widgets with one random dev-pool question.
+
+    Sets `st.session_state` entries the widgets below read via their `key`s,
+    so this must run *before* those widgets are instantiated in the same
+    script run (the standard Streamlit pattern for programmatically setting
+    a widget's value in response to a button click).
+    """
+    try:
+        pool = _load_question_pool(data_path)
+    except (OSError, ValueError) as exc:
+        st.session_state[_EXAMPLE_ERROR_KEY] = f"Could not load example data from {data_path!r}: {exc}"
+        return
+    if not pool:
+        st.session_state[_EXAMPLE_ERROR_KEY] = f"{data_path!r} has no questions to sample from."
+        return
+
+    question = random.choice(pool)
+    loaded_options = {letter: question.options.get(letter, "") for letter in OPTION_LETTERS}
+    st.session_state["question_stem"] = question.question
+    for letter, text in loaded_options.items():
+        st.session_state[f"option_{letter}"] = text
+
+    # Remembered so the expected answer can be shown only while the
+    # displayed question/options still match this loaded example -- if the
+    # user edits any field afterwards, the stale expected answer is hidden
+    # rather than silently pointing at a question that's no longer shown.
+    st.session_state[_EXAMPLE_QUESTION_ID_KEY] = question.question_id
+    st.session_state[_EXAMPLE_ANSWER_KEY] = question.answer
+    st.session_state[_EXAMPLE_LOADED_QUESTION_KEY] = question.question
+    st.session_state[_EXAMPLE_LOADED_OPTIONS_KEY] = loaded_options
+    st.session_state.pop(_EXAMPLE_ERROR_KEY, None)
+
+
+def _matches_loaded_example(question: str, options: dict) -> bool:
+    """Whether the currently displayed question/options are still exactly
+    the ones a "Load random example" click last populated (i.e. unedited
+    since), so the dataset's expected answer can be safely shown/compared.
+    """
+    return (
+        _EXAMPLE_ANSWER_KEY in st.session_state
+        and question == st.session_state.get(_EXAMPLE_LOADED_QUESTION_KEY)
+        and options == st.session_state.get(_EXAMPLE_LOADED_OPTIONS_KEY)
+    )
 
 
 def render_trace(trace: dict) -> None:
@@ -65,8 +133,8 @@ def main() -> None:
     st.title("MedQA-USMLE Multi-Agent Demo")
     st.caption(
         "Manual testing/demo UI over the black-box `answer_question` "
-        "entrypoint. No test-set access -- type or paste any ad hoc "
-        "question below."
+        "entrypoint. No official test-set access -- type or paste any ad "
+        "hoc question below, or load a random dev-pool example."
     )
 
     with st.sidebar:
@@ -100,7 +168,20 @@ def main() -> None:
         st.stop()
     variant = st.selectbox("Variant", SUPPORTED_VARIANTS)
 
-    question = st.text_area("Question stem", height=150)
+    st.subheader("Question")
+    if st.button("🎲 Load random example"):
+        _load_random_example(DEFAULT_EXAMPLE_DATA_PATH)
+    st.caption(
+        f"Fills the fields below with a random question from "
+        f"`{DEFAULT_EXAMPLE_DATA_PATH}` (the dev pool) -- a typing shortcut "
+        "only, never the official test split, and not itself an evaluation "
+        "run."
+    )
+    example_error = st.session_state.get(_EXAMPLE_ERROR_KEY)
+    if example_error:
+        st.warning(example_error)
+
+    question = st.text_area("Question stem", height=150, key="question_stem")
 
     st.subheader("Options")
     columns = st.columns(2)
@@ -108,6 +189,14 @@ def main() -> None:
     for index, letter in enumerate(OPTION_LETTERS):
         with columns[index % 2]:
             options[letter] = st.text_input(f"Option {letter}", key=f"option_{letter}")
+
+    showing_loaded_example = _matches_loaded_example(question, options)
+    if showing_loaded_example:
+        st.info(
+            f"Dataset expected answer for `{st.session_state[_EXAMPLE_QUESTION_ID_KEY]}` "
+            f"(from `{DEFAULT_EXAMPLE_DATA_PATH}`): "
+            f"**{st.session_state[_EXAMPLE_ANSWER_KEY]}**"
+        )
 
     if st.button("Get answer", type="primary"):
         if not question.strip():
@@ -123,7 +212,17 @@ def main() -> None:
             else:
                 result = outcome.result
                 st.subheader("Result")
-                st.metric("Predicted answer", result.answer or "(none)")
+                if showing_loaded_example:
+                    expected_answer = st.session_state[_EXAMPLE_ANSWER_KEY]
+                    result_columns = st.columns(2)
+                    result_columns[0].metric("Predicted answer", result.answer or "(none)")
+                    result_columns[1].metric("Dataset expected answer", expected_answer)
+                    if result.answer == expected_answer:
+                        st.success("Matches the dataset's expected answer.")
+                    else:
+                        st.warning("Does not match the dataset's expected answer.")
+                else:
+                    st.metric("Predicted answer", result.answer or "(none)")
                 if not result.is_valid:
                     st.warning(
                         "The model's response did not parse to exactly one "

@@ -3,8 +3,9 @@ from typing import Any, Dict
 from medqa_multiagent.config import RunConfig
 from medqa_multiagent.data import Question
 from medqa_multiagent.pipeline import run_dev_evaluation
+from medqa_multiagent.rag.retriever import Passage
 
-from fakes import FakeLLMClient
+from fakes import FakeLLMClient, FakeRetriever
 
 
 def make_config(**overrides: Any) -> RunConfig:
@@ -59,3 +60,34 @@ def test_run_dev_evaluation_marks_unparseable_response_invalid():
     assert records[0].predicted_answer is None
     assert records[0].is_invalid is True
     assert records[0].is_correct is False
+
+
+def test_run_dev_evaluation_v1_records_retrieved_passages_in_trace():
+    questions = [
+        Question(question_id="q1", question="Q1?", options={"A": "x", "B": "y"}, answer="A"),
+    ]
+    passages = [Passage(passage_id="p1", source="BookA", text="relevant text", score=0.9)]
+    retriever = FakeRetriever(passages)
+    client = FakeLLMClient(["Final Answer: A"])
+    config = make_config()
+
+    records = run_dev_evaluation(questions, "V1", config, client, retriever)
+
+    assert len(records) == 1
+    assert records[0].variant == "V1"
+    assert records[0].trace["retrieved_passages"][0]["passage_id"] == "p1"
+
+
+def test_run_dev_evaluation_v1_reuses_the_same_retriever_across_questions():
+    questions = [
+        Question(question_id="q1", question="Q1?", options={"A": "x"}, answer="A"),
+        Question(question_id="q2", question="Q2?", options={"A": "x"}, answer="A"),
+    ]
+    passages = [Passage(passage_id="p1", source="BookA", text="relevant text", score=0.9)]
+    retriever = FakeRetriever(passages)
+    client = FakeLLMClient(["Final Answer: A", "Final Answer: A"])
+    config = make_config()
+
+    run_dev_evaluation(questions, "V1", config, client, retriever)
+
+    assert retriever.calls == [("Q1?", config.rag_top_k), ("Q2?", config.rag_top_k)]

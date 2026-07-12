@@ -217,3 +217,8 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 .DS_Store
+
+# RAG index build artifacts (large; rebuilt locally via
+# scripts/build_rag_index.py, never checked in -- see README.md "RAG index").
+/data/rag_corpus/
+/data/rag_index/

@@ -25,6 +25,13 @@ Work in progress, built ticket by ticket. Currently implemented:
 - **Streamlit demo UI** (`medqa_multiagent/ui/`) — a manual
   testing/demoing convenience over the same black-box `answer_question`
   entrypoint, with no new answer-producing logic and no test-set access.
+- **V1 RAG-only variant** (`medqa_multiagent/rag/`) — the same one-call
+  black-box entrypoint, now with the prompt augmented by the top-`k`
+  MedCPT-embedded, FAISS-flat-indexed textbook passages retrieved for the
+  question's raw text (see "RAG index" below to build the index this
+  needs). Retrieved passages are recorded in the prediction/trace record's
+  `trace.retrieved_passages`. Both the embedding and retrieval calls are
+  on-disk cached, exactly like the LLM client.
 
 ## Data
 
@@ -34,6 +41,38 @@ Work in progress, built ticket by ticket. Currently implemented:
 Sourced from the public `GBaker/MedQA-USMLE-4-options-hf` mirror of the
 original Jin et al. (2020) release (CC-BY-4.0); see
 `scripts/download_medqa.py` to regenerate them.
+
+## RAG index (required for V1 and later RAG-retaining variants)
+
+V1 (and every later variant that retains RAG) retrieves passages from a
+local FAISS flat index built once, offline, by `scripts/build_rag_index.py`
+-- exactly analogous to how `scripts/download_medqa.py` populates
+`data/dev.jsonl`/`data/test.jsonl`. This is **not** done automatically;
+run it yourself before using V1:
+
+```bash
+.venv/bin/pip install -e ".[rag]"   # faiss-cpu, transformers, torch, numpy
+.venv/bin/python scripts/build_rag_index.py --config config.json
+```
+
+This downloads the `MedRAG/textbooks` corpus (18 medical textbooks, the
+canonical retrieval corpus paired with this benchmark), chunks it at your
+config's `rag_chunk_size` (~256 tokens by convention), embeds every chunk
+with MedCPT (`ncbi/MedCPT-Article-Encoder`), and writes a FAISS flat index
+plus passage metadata to your config's `rag_index_dir` (default
+`data/rag_index/`). It's a genuinely expensive one-time step (~125,000
+source rows, CPU-only MedCPT embedding, no GPU required but correspondingly
+slow) -- use `--max-rows N` for a **development-only** smoke-test index
+while iterating, never for the index actually reported on. See the
+script's module docstring for full details.
+
+Once built, nothing at pipeline run-time touches the network or re-does
+this work: `rag.client_factory.build_retriever` just loads the index, and
+both embedding and retrieval calls are on-disk cached (`.cache/embeddings/`,
+`.cache/retrieval/` by default) exactly like the LLM client's cache.
+
+If you only need V0, none of this is required -- `config.example.json`'s
+`rag_index_dir` field has a default and V0 never reads it.
 
 ## Development
 
@@ -89,6 +128,15 @@ Every LLM call is cached on disk (default `.cache/llm/`, override with
 prompt, so re-running the same invocation spends no additional API cost
 and yields identical predictions. Override the `.env` path (or opt out of
 it) with `--env-file path/to/other.env`.
+
+Pass `--variant V1` to either subcommand to run the RAG-only variant
+instead of V0's default (requires the RAG index to already be built --
+see "RAG index" above). `run`'s prediction/trace records then include a
+`trace.retrieved_passages` field with each question's exact top-`k`
+retrieved passages, and both embedding and retrieval calls are cached on
+disk (`.cache/embeddings/`, `.cache/retrieval/` by default) just like the
+LLM client -- override those locations with `--rag-index-dir`,
+`--embedding-cache-dir`, and `--retrieval-cache-dir` if needed.
 
 ## Running the demo UI
 
@@ -147,7 +195,9 @@ read.
 
 5. **Pick a variant** from the dropdown (only variants
    `entrypoint.SUPPORTED_VARIANTS` currently reports as implemented are
-   offered -- just `V0` for now).
+   offered -- `V0` and `V1` so far). Picking `V1` requires the RAG index
+   to already be built (see "RAG index" above) -- if it isn't, you'll see
+   a readable error instead of a stack trace.
 
 6. **Type/paste a question stem** and fill in all four options (A-D) in
    the main panel, or click "🎲 Load random example" to fill them in

@@ -15,6 +15,7 @@ def make_valid_data(**overrides):
         "rag_top_k": 3,
         "rag_chunk_size": 256,
         "memory_top_k": 3,
+        "rag_index_dir": "data/rag_index",
     }
     data.update(overrides)
     return data
@@ -30,6 +31,7 @@ def test_construct_valid_config():
     assert config.rag_top_k == 3
     assert config.rag_chunk_size == 256
     assert config.memory_top_k == 3
+    assert config.rag_index_dir == "data/rag_index"
 
 
 def test_config_is_immutable():
@@ -87,3 +89,26 @@ def test_from_json_file_round_trips(tmp_path):
     assert config.model == "deepseek-chat"
     assert config.seed == 7
     assert config.to_dict() == data
+
+
+def test_from_mapping_defaults_rag_index_dir_when_omitted():
+    """A config file written before `rag_index_dir` existed still loads,
+    since that field declares a dataclass default."""
+    data = make_valid_data()
+    del data["rag_index_dir"]
+
+    config = RunConfig.from_mapping(data)
+
+    assert config.rag_index_dir == "data/rag_index"
+
+
+def test_from_mapping_still_rejects_missing_required_field_alongside_a_defaulted_one():
+    data = make_valid_data()
+    del data["rag_index_dir"]
+    del data["seed"]
+
+    with pytest.raises(ValueError, match="Missing") as exc_info:
+        RunConfig.from_mapping(data)
+
+    assert "seed" in str(exc_info.value)
+    assert "rag_index_dir" not in str(exc_info.value)

@@ -9,7 +9,9 @@ to the model, so callers can log it verbatim.
 
 from __future__ import annotations
 
-from typing import Mapping
+from typing import Mapping, Sequence
+
+from .rag.retriever import Passage
 
 _ANSWER_FORMAT_INSTRUCTIONS = (
     'Respond with a concise, 1-3 sentence explanation, then end your '
@@ -33,6 +35,39 @@ def render_direct_prompt(question: str, options: Mapping[str, str]) -> str:
         "",
         "Options:",
     ]
+    for letter in sorted(options):
+        lines.append(f"{letter}. {options[letter]}")
+    lines.append("")
+    lines.append(_ANSWER_FORMAT_INSTRUCTIONS)
+    return "\n".join(lines)
+
+
+def render_rag_prompt(
+    question: str, options: Mapping[str, str], passages: Sequence[Passage]
+) -> str:
+    """Render the V1 RAG-augmented prompt: retrieved passages + question + options.
+
+    Used as the single LLM call's prompt in the V1 (RAG-only) variant --
+    the same one-call-per-question shape as `render_direct_prompt`, just
+    with a reference-passages section prepended. `passages` is expected in
+    the retriever's own ranked (best-first) order, and is rendered in that
+    same order without re-sorting.
+    """
+    lines = [
+        "You are a medical expert answering a USMLE-style multiple-choice question.",
+        "",
+        "Relevant reference passages:",
+    ]
+    if passages:
+        for index, passage in enumerate(passages, start=1):
+            lines.append(f"[{index}] ({passage.source}) {passage.text.strip()}")
+    else:
+        lines.append("(none retrieved)")
+    lines.append("")
+    lines.append("Question:")
+    lines.append(question.strip())
+    lines.append("")
+    lines.append("Options:")
     for letter in sorted(options):
         lines.append(f"{letter}. {options[letter]}")
     lines.append("")

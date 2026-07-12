@@ -10,12 +10,13 @@ memory-building pass over the same dev sample).
 
 from __future__ import annotations
 
-from typing import List, Sequence
+from typing import List, Optional, Sequence
 
 from .config import RunConfig
 from .data import Question
 from .entrypoint import answer_question
 from .llm_client import LLMClient
+from .rag.retriever import Retriever
 from .records import PredictionRecord
 
 
@@ -24,17 +25,24 @@ def run_dev_evaluation(
     variant: str,
     config: RunConfig,
     client: LLMClient,
+    retriever: Optional[Retriever] = None,
 ) -> List[PredictionRecord]:
     """Answer every question in `questions` and return one record each.
 
     `questions` is expected to already be this run's sampled subset (e.g.
     the output of `medqa_multiagent.sampling.sample_dev_set`) -- this
     function itself performs no sampling.
+
+    `retriever` is forwarded to `answer_question` for variants that need
+    retrieval (currently V1); passing one built once by the caller (rather
+    than leaving it `None` and letting `answer_question` lazily build a
+    default per-question) avoids reloading the FAISS index/MedCPT model on
+    every question in the loop.
     """
     records: List[PredictionRecord] = []
     for question in questions:
         result = answer_question(
-            question.question, question.options, variant, config, client
+            question.question, question.options, variant, config, client, retriever
         )
         records.append(
             PredictionRecord(

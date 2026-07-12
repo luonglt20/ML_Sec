@@ -90,6 +90,11 @@ Build one evaluation harness plus five increasingly-capable *variants* of the sa
 43. As a developer, I want the evolutionary-optimization component explicitly marked out of scope in both code and docs, so effort isn't split against a descoped, optional requirement.
 44. As a developer, I want the error-analysis table intentionally left unimplemented (structure not yet decided), so I don't build a table whose design will be revisited and likely reworked.
 
+### Demo UI (optional convenience, non-pipeline)
+45. As a developer, I want a minimal Streamlit demo UI wrapping the black-box entrypoint, so I can manually test/demo the pipeline interactively in a browser, reusing the exact same cached LLM client stack as the CLI.
+46. As a developer, I want the demo UI's variant selector to read `entrypoint.SUPPORTED_VARIANTS` live, so adding a new variant (V1-V4) requires no UI code change.
+47. As a developer, I want the demo UI to have zero official test-set access and no dev/test evaluation-pool sampling of its own, so it can never be mistaken for, or misused as, part of the formal evaluation harness.
+
 ## Implementation Decisions
 
 - **Single black-box seam.** The entire system is reachable through exactly one entrypoint — conceptually `answer_question(question, options, variant) -> {answer, explanation}` plus a thin CLI wrapper — which is also the primary seam used for testing (see Testing Decisions). All five variants (V0-V4) are configurations of the same underlying pipeline machinery, not five separate code paths.
@@ -107,6 +112,7 @@ Build one evaluation harness plus five increasingly-capable *variants* of the sa
 - **Error-analysis table is explicitly not implemented in this spec's scope** — its structure (leading candidate: pipeline-stage failure attribution) is deferred to a follow-up decision/spec.
 - **No external multi-agent framework** (LangGraph/AutoGen/CrewAI) is used; orchestration is custom Python for full control over exact prompts and call sequences.
 - **No evolutionary optimization** is implemented; it is explicitly out of scope for this system.
+- **Demo UI is additive, not part of the pipeline seam.** A Streamlit app (`medqa_multiagent/ui/`) offers the same black-box entrypoint through a browser instead of the CLI, purely for live demos/manual testing. It introduces no new answer-producing logic and shares the CLI's exact LLM client stack via one factored-out `client_factory.build_llm_client`. It has no access to the official test split and performs no dev/test sampling of its own -- an optional "load a random dev-pool example" convenience is unseeded, ad hoc, reads only `data/dev.jsonl`, and produces no persisted prediction/trace record.
 
 ## Testing Decisions
 
@@ -134,6 +140,7 @@ Build one evaluation harness plus five increasingly-capable *variants* of the sa
 - Clinical-grade validation, deployment, or production hardening of any kind — this system is a research/evaluation artifact only.
 - Non-US or 5-option MedQA variants, and any language other than English.
 - Publishing this spec to an actual issue tracker (see Further Notes).
+- Any UI-driven evaluation, scoring, or batch/sampled question runs -- the demo UI (see "Demo UI" user stories above) answers exactly one ad hoc question at a time and is not an alternate evaluation harness.
 
 ## Further Notes
 

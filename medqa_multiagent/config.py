@@ -12,7 +12,7 @@ config alone.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, fields
+from dataclasses import MISSING, asdict, dataclass, fields
 from pathlib import Path
 from typing import Any, Mapping, Union
 
@@ -43,6 +43,12 @@ class RunConfig:
             retrieval corpus.
         memory_top_k: Number of case-memory exemplars retrieved per question
             for variants that use long-term memory (V3/V4).
+        rag_index_dir: Directory containing the pre-built RAG retrieval
+            index (FAISS flat index + passage metadata) produced once by
+            `scripts/build_rag_index.py`. Defaults to `"data/rag_index"` so
+            existing config files (from before V1/RAG landed) keep working
+            unchanged -- this field has a default and is therefore optional
+            in `from_mapping`/`from_json_file`.
     """
 
     model: str
@@ -53,6 +59,7 @@ class RunConfig:
     rag_top_k: int
     rag_chunk_size: int
     memory_top_k: int
+    rag_index_dir: str = "data/rag_index"
 
     def __post_init__(self) -> None:
         if not isinstance(self.model, str) or not self.model.strip():
@@ -76,11 +83,14 @@ class RunConfig:
     def from_mapping(cls, data: Mapping[str, Any]) -> "RunConfig":
         """Build a `RunConfig` from a plain mapping (e.g. parsed JSON/YAML).
 
-        Rejects both unknown and missing fields so a config file typo fails
-        loudly at load time rather than silently falling back to a
-        hardcoded default.
+        Rejects unknown fields, and rejects missing fields *unless* that
+        field declares a dataclass default (e.g. `rag_index_dir`) -- so a
+        config file typo or a genuinely required omission still fails
+        loudly at load time, while a config file written before a new,
+        defaulted field was introduced keeps loading unchanged.
         """
-        known_fields = {f.name for f in fields(cls)}
+        all_fields = {f.name: f for f in fields(cls)}
+        known_fields = set(all_fields)
         given_fields = set(data)
 
         unknown = given_fields - known_fields
@@ -90,12 +100,18 @@ class RunConfig:
             )
 
         missing = known_fields - given_fields
-        if missing:
+        required_missing = {
+            name
+            for name in missing
+            if all_fields[name].default is MISSING
+            and all_fields[name].default_factory is MISSING  # type: ignore[misc]
+        }
+        if required_missing:
             raise ValueError(
-                f"Missing run configuration field(s): {sorted(missing)}"
+                f"Missing run configuration field(s): {sorted(required_missing)}"
             )
 
-        return cls(**{name: data[name] for name in known_fields})
+        return cls(**{name: data[name] for name in given_fields & known_fields})
 
     @classmethod
     def from_json_file(cls, path: Union[str, Path]) -> "RunConfig":

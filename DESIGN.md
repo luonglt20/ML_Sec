@@ -138,6 +138,17 @@ All 5 pairs get: accuracy delta, bootstrap CI, McNemar test, win/loss/tie breakd
 
 The submitted system will be reused as the target system for a later attack/defense project. Addressed via the minimal stable black-box entrypoint in §12 — no further speculative design added now.
 
+## 16. Demo/Testing UI (Additional Tooling, Post-Implementation)
+
+Not part of the original source plan or the formal V0-V4 evaluation pipeline. Added afterward, purely as a manual testing/demo convenience layered on top of §12's black-box entrypoint, for live demos — documented here after the fact for traceability, consistent with this project's "nothing is a scattered, undocumented decision" ethos.
+
+- **Scope:** a single-page Streamlit app (`medqa_multiagent/ui/app.py`) that lets a user type/paste one question + 4 options, pick a variant (read live from `entrypoint.SUPPORTED_VARIANTS`, so it requires no UI code change as V1-V4 land), and see the predicted answer, explanation, invalid-response flag, and per-agent trace from one call through `answer_question`. Adds no new answer-producing logic beyond what the CLI already calls.
+- **Client stack reuse:** built on the exact same cache- and logging-wrapped LLM client stack as the CLI (`create_llm_client` + `OnDiskLLMCache` + `LoggingLLMClient`), factored into one shared `client_factory.build_llm_client` used by both, so demo runs are cached identically to CLI runs — no additional API spend for repeat submissions.
+- **No official test-set access, structurally enforced by omission:** the UI never reads `data/test.jsonl`, and never performs the config-driven, seeded dev/test sampling used by the evaluation harness (`sampling.sample_dev_set` / `official_eval.sample_official_test_set`) — it only ever answers one ad hoc, user-supplied question at a time.
+- **Optional "load random example" convenience:** may pull one uniformly random question from the local dev pool (`data/dev.jsonl`) as a typing shortcut, and display that question's dataset-recorded expected answer for comparison. This is explicitly *not* a sampled dev-set evaluation pass — it's unseeded, ad hoc, and produces no persisted prediction/trace record — and it never reads the official test split.
+- **Convenience `.env` loading:** both the CLI and the UI optionally load provider API keys from a local `.env` file, via a minimal, dependency-free `KEY=VALUE` parser (no `python-dotenv` dependency added), rather than requiring the key to be exported by hand every session. A value already exported in the shell always takes precedence.
+- **Out of scope for this addendum:** any new evaluation/statistics logic, any UI-driven scoring across multiple questions, and any test-set exposure. The UI is purely a thin, additional consumer of the same entrypoint the CLI and the future attack/defense project use.
+
 ---
 
 ## Open Items (deferred, to resolve before/during implementation)
@@ -176,6 +187,10 @@ The submitted system will be reused as the target system for a later attack/defe
 25. Long-term memory retrieval settings: top-k=3 (parallels RAG).
 26. Model choice: `gpt-4o-mini` for dev, `deepseek-chat` for reported evaluation runs.
 27. Final-project forward-compatibility: minimal black-box entrypoint only, no speculative attack hooks.
+28. Added a Streamlit demo UI as additional tooling (not part of the original source plan), purely for manual testing/live demos — see §16.
+29. Demo UI reuses the CLI's exact LLM client stack via one shared `client_factory.build_llm_client`, rather than duplicating cache/logging wiring.
+30. Demo UI's optional "load random example" convenience is restricted to the dev pool only, is unseeded/ad hoc, and produces no persisted prediction record — keeping the official test split's "touched only via the official-evaluation code path" invariant (§4) intact.
+31. Added optional `.env` file loading (CLI and UI) as a minimal, dependency-free convenience — shell-exported values still take precedence.
 
 ---
 

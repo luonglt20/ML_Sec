@@ -20,27 +20,21 @@ import json
 import sys
 from typing import Optional, Sequence
 
-from .cache import OnDiskLLMCache
+from .client_factory import DEFAULT_CACHE_DIR, build_llm_client
 from .config import RunConfig
 from .data import load_questions
 from .entrypoint import answer_question
-from .llm_client import LLMClient, LoggingLLMClient, create_llm_client
+from .env_file import load_env_file
 from .pipeline import run_dev_evaluation
 from .records import write_prediction_records
 from .sampling import sample_dev_set
 
-DEFAULT_CACHE_DIR = ".cache/llm"
-
-
-def _build_client(config: RunConfig, cache_dir: str) -> LLMClient:
-    base_client = create_llm_client(config.model)
-    cached_client = OnDiskLLMCache(base_client, cache_dir)
-    return LoggingLLMClient(cached_client)
+DEFAULT_ENV_FILE = ".env"
 
 
 def cmd_answer(args: argparse.Namespace) -> int:
     config = RunConfig.from_json_file(args.config)
-    client = _build_client(config, args.cache_dir)
+    client = build_llm_client(config, args.cache_dir)
     options = json.loads(args.options)
 
     result = answer_question(args.question, options, args.variant, config, client)
@@ -51,7 +45,7 @@ def cmd_answer(args: argparse.Namespace) -> int:
 
 def cmd_run(args: argparse.Namespace) -> int:
     config = RunConfig.from_json_file(args.config)
-    client = _build_client(config, args.cache_dir)
+    client = build_llm_client(config, args.cache_dir)
 
     pool = load_questions(args.data)
     dev_sample = sample_dev_set(pool, config)
@@ -82,6 +76,16 @@ def build_parser() -> argparse.ArgumentParser:
         help='JSON object of option letter -> option text, e.g. \'{"A": "...", "B": "..."}\'.',
     )
     answer_parser.add_argument("--cache-dir", default=DEFAULT_CACHE_DIR)
+    answer_parser.add_argument(
+        "--env-file",
+        default=DEFAULT_ENV_FILE,
+        help=(
+            "Path to a .env file of KEY=VALUE provider API keys "
+            f"(default: {DEFAULT_ENV_FILE}). Loaded before checking for "
+            "required API key environment variables; values already "
+            "exported in the shell always take precedence."
+        ),
+    )
     answer_parser.set_defaults(func=cmd_answer)
 
     run_parser = subparsers.add_parser(
@@ -99,6 +103,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--output", required=True, help="Path to write the prediction/trace JSONL file to."
     )
     run_parser.add_argument("--cache-dir", default=DEFAULT_CACHE_DIR)
+    run_parser.add_argument(
+        "--env-file",
+        default=DEFAULT_ENV_FILE,
+        help=(
+            "Path to a .env file of KEY=VALUE provider API keys "
+            f"(default: {DEFAULT_ENV_FILE}). Loaded before checking for "
+            "required API key environment variables; values already "
+            "exported in the shell always take precedence."
+        ),
+    )
     run_parser.set_defaults(func=cmd_run)
 
     return parser
@@ -107,6 +121,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    load_env_file(args.env_file)
     return args.func(args)
 
 

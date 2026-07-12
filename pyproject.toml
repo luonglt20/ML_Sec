@@ -8,6 +8,7 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]
+ui = ["streamlit>=1.28"]
 
 [project.scripts]
 medqa-multiagent = "medqa_multiagent.cli:main"

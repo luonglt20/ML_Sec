@@ -13,9 +13,11 @@ Exposes:
 
 from .cache import OnDiskLLMCache
 from .cache_key import compute_cache_key
+from .client_factory import DEFAULT_CACHE_DIR, build_llm_client
 from .config import RunConfig
 from .data import Question, load_questions
 from .entrypoint import AnswerResult, answer_question
+from .env_file import load_env_file
 from .llm_client import (
     LLMClient,
     LLMResponse,
@@ -49,6 +51,9 @@ __all__ = [
     "UnknownModelError",
     "create_llm_client",
     "OnDiskLLMCache",
+    "DEFAULT_CACHE_DIR",
+    "build_llm_client",
+    "load_env_file",
     "AnswerResult",
     "answer_question",
     "run_dev_evaluation",

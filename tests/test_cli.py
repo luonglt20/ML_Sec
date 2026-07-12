@@ -1,6 +1,6 @@
 import json
 
-from medqa_multiagent import cli
+from medqa_multiagent import cli, client_factory
 from medqa_multiagent.records import read_prediction_records
 
 from fakes import FakeLLMClient
@@ -37,7 +37,7 @@ def make_data_file(path):
 def test_answer_command_prints_answer_and_explanation(tmp_path, monkeypatch, capsys):
     config_path = make_config_file(tmp_path / "config.json")
     fake = FakeLLMClient(["Some reasoning.\nFinal Answer: B"])
-    monkeypatch.setattr(cli, "create_llm_client", lambda model: fake)
+    monkeypatch.setattr(client_factory, "create_llm_client", lambda model: fake)
 
     exit_code = cli.main(
         [
@@ -58,6 +58,58 @@ def test_answer_command_prints_answer_and_explanation(tmp_path, monkeypatch, cap
     assert output == {"answer": "B", "explanation": "Some reasoning."}
 
 
+def test_answer_command_loads_the_given_env_file_before_dispatching(tmp_path, monkeypatch):
+    config_path = make_config_file(tmp_path / "config.json")
+    fake = FakeLLMClient(["Final Answer: A"])
+    monkeypatch.setattr(client_factory, "create_llm_client", lambda model: fake)
+    env_file_path = tmp_path / "custom.env"
+    loaded_paths = []
+    monkeypatch.setattr(cli, "load_env_file", lambda path: loaded_paths.append(path))
+
+    exit_code = cli.main(
+        [
+            "answer",
+            "--config",
+            str(config_path),
+            "--question",
+            "Q?",
+            "--options",
+            json.dumps({"A": "x", "B": "y"}),
+            "--cache-dir",
+            str(tmp_path / "cache"),
+            "--env-file",
+            str(env_file_path),
+        ]
+    )
+
+    assert exit_code == 0
+    assert loaded_paths == [str(env_file_path)]
+
+
+def test_answer_command_defaults_env_file_to_dotenv(tmp_path, monkeypatch):
+    config_path = make_config_file(tmp_path / "config.json")
+    fake = FakeLLMClient(["Final Answer: A"])
+    monkeypatch.setattr(client_factory, "create_llm_client", lambda model: fake)
+    loaded_paths = []
+    monkeypatch.setattr(cli, "load_env_file", lambda path: loaded_paths.append(path))
+
+    cli.main(
+        [
+            "answer",
+            "--config",
+            str(config_path),
+            "--question",
+            "Q?",
+            "--options",
+            json.dumps({"A": "x", "B": "y"}),
+            "--cache-dir",
+            str(tmp_path / "cache"),
+        ]
+    )
+
+    assert loaded_paths == [cli.DEFAULT_ENV_FILE]
+
+
 def test_run_command_writes_one_record_per_sampled_question(tmp_path, monkeypatch):
     config_path = make_config_file(tmp_path / "config.json")
     data_path = make_data_file(tmp_path / "dev.jsonl")
@@ -65,7 +117,7 @@ def test_run_command_writes_one_record_per_sampled_question(tmp_path, monkeypatc
     cache_dir = tmp_path / "cache"
 
     fake = FakeLLMClient(["Final Answer: A"] * 3)  # dev_sample_size == 3
-    monkeypatch.setattr(cli, "create_llm_client", lambda model: fake)
+    monkeypatch.setattr(client_factory, "create_llm_client", lambda model: fake)
 
     exit_code = cli.main(
         [
@@ -100,7 +152,7 @@ def test_rerunning_the_same_run_invocation_hits_the_cache_and_yields_identical_p
     cache_dir = tmp_path / "cache"
 
     first_run_client = FakeLLMClient(["Final Answer: A"] * 3)
-    monkeypatch.setattr(cli, "create_llm_client", lambda model: first_run_client)
+    monkeypatch.setattr(client_factory, "create_llm_client", lambda model: first_run_client)
     cli.main(
         [
             "run",
@@ -119,7 +171,7 @@ def test_rerunning_the_same_run_invocation_hits_the_cache_and_yields_identical_p
     # A fresh client with *no* scripted responses -- if the re-run makes any
     # real call, FakeLLMClient raises, proving the re-run is cache-hits only.
     second_run_client = FakeLLMClient([])
-    monkeypatch.setattr(cli, "create_llm_client", lambda model: second_run_client)
+    monkeypatch.setattr(client_factory, "create_llm_client", lambda model: second_run_client)
     exit_code = cli.main(
         [
             "run",

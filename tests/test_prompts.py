@@ -1,4 +1,10 @@
-from medqa_multiagent.prompts import render_direct_prompt, render_rag_prompt
+from medqa_multiagent.prompts import (
+    render_direct_prompt,
+    render_rag_prompt,
+    render_reasoner_prompt,
+    render_router_prompt,
+    render_verifier_prompt,
+)
 from medqa_multiagent.rag.retriever import Passage
 
 
@@ -86,4 +92,71 @@ def test_render_rag_prompt_instructs_final_answer_format():
 def test_render_rag_prompt_is_a_pure_function_of_its_arguments():
     prompt_a = render_rag_prompt("Q?", {"A": "x"}, _make_passages())
     prompt_b = render_rag_prompt("Q?", {"A": "x"}, _make_passages())
+    assert prompt_a == prompt_b
+
+
+def test_render_router_prompt_includes_the_question():
+    prompt = render_router_prompt("What is the capital of France?")
+    assert "What is the capital of France?" in prompt
+
+
+def test_render_router_prompt_instructs_query_only_no_answer():
+    prompt = render_router_prompt("Q?")
+    assert "search query" in prompt.lower()
+    assert "Final Answer" not in prompt
+
+
+def test_render_router_prompt_is_a_pure_function_of_its_arguments():
+    assert render_router_prompt("Q?") == render_router_prompt("Q?")
+
+
+def test_render_reasoner_prompt_includes_question_options_and_passages():
+    prompt = render_reasoner_prompt("Q?", {"A": "x", "B": "y"}, _make_passages())
+    assert "Q?" in prompt
+    assert "A. x" in prompt
+    assert "B. y" in prompt
+    assert "Penicillin inhibits cell wall synthesis." in prompt
+    assert "BookA" in prompt
+
+
+def test_render_reasoner_prompt_instructs_final_answer_format():
+    prompt = render_reasoner_prompt("Q?", {"A": "x"}, _make_passages())
+    assert "Final Answer: <letter>" in prompt
+
+
+def test_render_reasoner_prompt_with_no_passages_says_so_explicitly():
+    prompt = render_reasoner_prompt("Q?", {"A": "x"}, [])
+    assert "(none retrieved)" in prompt
+
+
+def test_render_reasoner_prompt_is_a_pure_function_of_its_arguments():
+    prompt_a = render_reasoner_prompt("Q?", {"A": "x"}, _make_passages())
+    prompt_b = render_reasoner_prompt("Q?", {"A": "x"}, _make_passages())
+    assert prompt_a == prompt_b
+
+
+def test_render_verifier_prompt_includes_question_options_passages_and_candidate():
+    prompt = render_verifier_prompt(
+        "Q?", {"A": "x", "B": "y"}, _make_passages(), "B", "Some reasoner explanation."
+    )
+    assert "Q?" in prompt
+    assert "A. x" in prompt
+    assert "Penicillin inhibits cell wall synthesis." in prompt
+    assert "B" in prompt
+    assert "Some reasoner explanation." in prompt
+
+
+def test_render_verifier_prompt_instructs_final_answer_format():
+    prompt = render_verifier_prompt("Q?", {"A": "x"}, _make_passages(), "A", "Explanation.")
+    assert "Final Answer: <letter>" in prompt
+
+
+def test_render_verifier_prompt_handles_a_none_candidate_answer_explicitly():
+    prompt = render_verifier_prompt("Q?", {"A": "x"}, _make_passages(), None, "")
+    assert "invalid/unparseable response" in prompt
+
+
+def test_render_verifier_prompt_is_a_pure_function_of_its_arguments():
+    prompt_a = render_verifier_prompt("Q?", {"A": "x"}, _make_passages(), "A", "Explanation.")
+    prompt_b = render_verifier_prompt("Q?", {"A": "x"}, _make_passages(), "A", "Explanation.")
     assert prompt_a == prompt_b

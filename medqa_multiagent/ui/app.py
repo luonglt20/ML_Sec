@@ -38,7 +38,18 @@ from medqa_multiagent.client_factory import DEFAULT_CACHE_DIR
 from medqa_multiagent.data import Question, load_questions
 from medqa_multiagent.entrypoint import SUPPORTED_VARIANTS
 from medqa_multiagent.env_file import load_env_file
-from medqa_multiagent.ui.logic import DEFAULT_CONFIG_PATH, OPTION_LETTERS, get_answer, load_config
+from medqa_multiagent.ui.logic import (
+    DEFAULT_CONFIG_PATH,
+    DEFAULT_SAVED_QUESTIONS_PATH,
+    OPTION_LETTERS,
+    SavedQuestion,
+    clear_saved_questions,
+    delete_saved_question,
+    get_answer,
+    load_config,
+    load_saved_questions,
+    save_question,
+)
 
 DEFAULT_ENV_FILE = ".env"
 
@@ -53,6 +64,9 @@ _EXAMPLE_QUESTION_ID_KEY = "_example_question_id"
 _EXAMPLE_ANSWER_KEY = "_example_expected_answer"
 _EXAMPLE_LOADED_QUESTION_KEY = "_example_loaded_question"
 _EXAMPLE_LOADED_OPTIONS_KEY = "_example_loaded_options"
+_EXAMPLE_SOURCE_LABEL_KEY = "_example_source_label"
+
+_SAVED_QUESTION_SELECTBOX_KEY = "_saved_question_selectbox"
 
 
 @st.cache_data(show_spinner=False)
@@ -91,13 +105,60 @@ def _load_random_example(data_path: str) -> None:
     st.session_state[_EXAMPLE_ANSWER_KEY] = question.answer
     st.session_state[_EXAMPLE_LOADED_QUESTION_KEY] = question.question
     st.session_state[_EXAMPLE_LOADED_OPTIONS_KEY] = loaded_options
+    st.session_state[_EXAMPLE_SOURCE_LABEL_KEY] = f"the dev pool (`{data_path}`)"
     st.session_state.pop(_EXAMPLE_ERROR_KEY, None)
+
+
+def _load_saved_question(saved: SavedQuestion) -> None:
+    """Populate the question/option widgets with one previously saved question.
+
+    Mirrors `_load_random_example`'s session_state-before-widget-
+    instantiation pattern (see its docstring), so this must likewise run
+    before the question/option widgets below are instantiated in the same
+    script run. If the saved question recorded a known expected answer
+    (i.e. it was saved while showing an unedited "Load random example"
+    question), that expected answer is shown again exactly like a freshly
+    loaded dev-pool example; otherwise any stale expected-answer bookkeeping
+    from a previous load is cleared.
+    """
+    loaded_options = {letter: saved.options.get(letter, "") for letter in OPTION_LETTERS}
+    st.session_state["question_stem"] = saved.question
+    for letter, text in loaded_options.items():
+        st.session_state[f"option_{letter}"] = text
+
+    if saved.expected_answer is not None:
+        st.session_state[_EXAMPLE_QUESTION_ID_KEY] = saved.question_id or "(saved question)"
+        st.session_state[_EXAMPLE_ANSWER_KEY] = saved.expected_answer
+        st.session_state[_EXAMPLE_LOADED_QUESTION_KEY] = saved.question
+        st.session_state[_EXAMPLE_LOADED_OPTIONS_KEY] = loaded_options
+        st.session_state[_EXAMPLE_SOURCE_LABEL_KEY] = "your saved questions"
+    else:
+        st.session_state.pop(_EXAMPLE_QUESTION_ID_KEY, None)
+        st.session_state.pop(_EXAMPLE_ANSWER_KEY, None)
+        st.session_state.pop(_EXAMPLE_LOADED_QUESTION_KEY, None)
+        st.session_state.pop(_EXAMPLE_LOADED_OPTIONS_KEY, None)
+
+
+def _saved_question_label(index: int, saved: SavedQuestion) -> str:
+    """A short, unique-by-position dropdown label for one saved question.
+
+    Prefixed with `index + 1` so labels stay unique (and thus safely
+    resolvable back to their list index) even when two saved questions
+    happen to share the same preview text.
+    """
+    first_line = saved.question.strip().splitlines()[0] if saved.question.strip() else ""
+    preview = first_line if first_line else "(empty question)"
+    if len(preview) > 60:
+        preview = preview[:57] + "..."
+    timestamp = saved.saved_at[:19].replace("T", " ")
+    return f"{index + 1}. [{timestamp}] {preview}"
 
 
 def _matches_loaded_example(question: str, options: dict) -> bool:
     """Whether the currently displayed question/options are still exactly
-    the ones a "Load random example" click last populated (i.e. unedited
-    since), so the dataset's expected answer can be safely shown/compared.
+    the ones a "Load random example"/"Load selected saved question" click
+    last populated (i.e. unedited since), so a known expected answer can be
+    safely shown/compared.
     """
     return (
         _EXAMPLE_ANSWER_KEY in st.session_state
@@ -153,6 +214,16 @@ def main() -> None:
 
         config_path = st.text_input("Config file path", value=DEFAULT_CONFIG_PATH)
         cache_dir = st.text_input("Cache directory", value=DEFAULT_CACHE_DIR)
+        saved_questions_path = st.text_input(
+            "Saved questions file",
+            value=DEFAULT_SAVED_QUESTIONS_PATH,
+            help=(
+                "Local, on-disk scratchpad of questions you've chosen to "
+                "keep around (via '💾 Save this question' below) for "
+                "repeated manual retesting -- e.g. a question that turned "
+                "out to be hard. Not read by the CLI/evaluation harness."
+            ),
+        )
 
         config, config_error = load_config(config_path)
         if config_error or config is None:
@@ -169,17 +240,47 @@ def main() -> None:
     variant = st.selectbox("Variant", SUPPORTED_VARIANTS)
 
     st.subheader("Question")
-    if st.button("🎲 Load random example"):
-        _load_random_example(DEFAULT_EXAMPLE_DATA_PATH)
-    st.caption(
-        f"Fills the fields below with a random question from "
-        f"`{DEFAULT_EXAMPLE_DATA_PATH}` (the dev pool) -- a typing shortcut "
-        "only, never the official test split, and not itself an evaluation "
-        "run."
-    )
-    example_error = st.session_state.get(_EXAMPLE_ERROR_KEY)
-    if example_error:
-        st.warning(example_error)
+    example_col, saved_col = st.columns(2)
+    with example_col:
+        if st.button("🎲 Load random example"):
+            _load_random_example(DEFAULT_EXAMPLE_DATA_PATH)
+        st.caption(
+            f"Fills the fields below with a random question from "
+            f"`{DEFAULT_EXAMPLE_DATA_PATH}` (the dev pool) -- a typing "
+            "shortcut only, never the official test split, and not itself "
+            "an evaluation run."
+        )
+        example_error = st.session_state.get(_EXAMPLE_ERROR_KEY)
+        if example_error:
+            st.warning(example_error)
+
+    with saved_col:
+        saved_questions = load_saved_questions(saved_questions_path)
+        if saved_questions:
+            labels = [
+                _saved_question_label(index, saved) for index, saved in enumerate(saved_questions)
+            ]
+            selected_label = st.selectbox(
+                "💾 Saved questions", labels, key=_SAVED_QUESTION_SELECTBOX_KEY
+            )
+            selected_index = labels.index(selected_label)
+            load_col, delete_col = st.columns(2)
+            with load_col:
+                if st.button("📂 Load selected"):
+                    _load_saved_question(saved_questions[selected_index])
+                    st.rerun()
+            with delete_col:
+                if st.button("🗑️ Delete selected"):
+                    delete_saved_question(selected_index, saved_questions_path)
+                    st.rerun()
+            if st.button("🧹 Clear all saved questions"):
+                clear_saved_questions(saved_questions_path)
+                st.rerun()
+        else:
+            st.caption(
+                "No saved questions yet -- use \"💾 Save this question\" below "
+                "to keep a hard one around for repeated retesting."
+            )
 
     question = st.text_area("Question stem", height=150, key="question_stem")
 
@@ -192,13 +293,36 @@ def main() -> None:
 
     showing_loaded_example = _matches_loaded_example(question, options)
     if showing_loaded_example:
+        source_label = st.session_state.get(_EXAMPLE_SOURCE_LABEL_KEY, "the dev pool")
         st.info(
-            f"Dataset expected answer for `{st.session_state[_EXAMPLE_QUESTION_ID_KEY]}` "
-            f"(from `{DEFAULT_EXAMPLE_DATA_PATH}`): "
+            f"Recorded expected answer for `{st.session_state[_EXAMPLE_QUESTION_ID_KEY]}` "
+            f"(from {source_label}): "
             f"**{st.session_state[_EXAMPLE_ANSWER_KEY]}**"
         )
 
-    if st.button("Get answer", type="primary"):
+    answer_col, save_col = st.columns([3, 1])
+    with answer_col:
+        get_answer_clicked = st.button("Get answer", type="primary")
+    with save_col:
+        save_clicked = st.button("💾 Save this question")
+
+    if save_clicked:
+        if not question.strip():
+            st.warning("Enter a question stem first.")
+        elif not all(text.strip() for text in options.values()):
+            st.warning("Fill in all four options first.")
+        else:
+            expected_answer = st.session_state[_EXAMPLE_ANSWER_KEY] if showing_loaded_example else None
+            question_id = st.session_state[_EXAMPLE_QUESTION_ID_KEY] if showing_loaded_example else None
+            save_question(
+                question, options, expected_answer, saved_questions_path, question_id
+            )
+            st.success(
+                "Saved -- reload it anytime from the \"💾 Saved questions\" "
+                "selector above, even across app restarts."
+            )
+
+    if get_answer_clicked:
         if not question.strip():
             st.warning("Enter a question stem first.")
         elif not all(text.strip() for text in options.values()):

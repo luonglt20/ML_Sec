@@ -92,8 +92,11 @@ def test_unsupported_variant_raises_not_implemented():
     client = FakeLLMClient(["Final Answer: A"])
     config = make_config()
 
+    # V3 (not V2): V2 (multi-agent Router->Reasoner->Verifier) is now
+    # implemented (see #4), so an "unsupported variant" test needs a
+    # variant still awaiting its own ticket.
     with pytest.raises(NotImplementedError):
-        answer_question("Q?", {"A": "x", "B": "y"}, "V2", config, client)
+        answer_question("Q?", {"A": "x", "B": "y"}, "V3", config, client)
 
 
 def _make_passages():
@@ -231,4 +234,184 @@ def test_v1_without_an_injected_retriever_builds_a_default_one(monkeypatch):
     result = answer_question("Q?", {"A": "x", "B": "y"}, "V1", config, client)
 
     assert result.variant == "V1"
+    assert len(fake_default_retriever.calls) == 1
+
+
+def test_v2_makes_exactly_three_llm_calls_router_reasoner_verifier():
+    client = FakeLLMClient(
+        [
+            "cell wall synthesis inhibitors",  # router
+            "Beta-lactams block cell wall synthesis.\nFinal Answer: C",  # reasoner
+            "Agreed, beta-lactams are correct.\nFinal Answer: C",  # verifier
+        ]
+    )
+    retriever = FakeRetriever(_make_passages())
+    config = make_config()
+
+    answer_question(
+        "Which drug blocks cell wall synthesis?",
+        {"A": "Gentamicin", "B": "Ciprofloxacin", "C": "Ceftriaxone", "D": "Trimethoprim"},
+        "V2",
+        config,
+        client,
+        retriever,
+    )
+
+    assert len(client.calls) == 3
+    assert [call["role"] for call in client.calls] == ["router", "reasoner", "verifier"]
+
+
+def test_v2_router_query_is_used_to_retrieve_not_the_raw_question():
+    client = FakeLLMClient(
+        [
+            "cell wall synthesis inhibitors",
+            "Final Answer: C",
+            "Final Answer: C",
+        ]
+    )
+    retriever = FakeRetriever(_make_passages())
+    config = make_config(rag_top_k=3)
+
+    answer_question(
+        "Which drug blocks cell wall synthesis?", {"A": "x", "B": "y"}, "V2", config, client, retriever
+    )
+
+    assert retriever.calls == [("cell wall synthesis inhibitors", 3)]
+
+
+def test_v2_verifier_approves_when_it_matches_the_reasoners_candidate():
+    client = FakeLLMClient(
+        [
+            "query",
+            "Reasoner explanation.\nFinal Answer: C",
+            "Verifier agrees.\nFinal Answer: C",
+        ]
+    )
+    retriever = FakeRetriever(_make_passages())
+    config = make_config()
+
+    result = answer_question("Q?", {"A": "x", "C": "z"}, "V2", config, client, retriever)
+
+    assert result.answer == "C"
+    assert result.explanation == "Verifier agrees."
+    assert result.variant == "V2"
+    assert result.trace["verifier_decision"]["decision"] == "approve"
+
+
+def test_v2_verifier_overrides_when_it_disagrees_with_the_reasoners_candidate():
+    client = FakeLLMClient(
+        [
+            "query",
+            "Reasoner explanation.\nFinal Answer: A",
+            "Verifier disagrees and corrects it.\nFinal Answer: C",
+        ]
+    )
+    retriever = FakeRetriever(_make_passages())
+    config = make_config()
+
+    result = answer_question("Q?", {"A": "x", "C": "z"}, "V2", config, client, retriever)
+
+    assert result.answer == "C"
+    assert result.explanation == "Verifier disagrees and corrects it."
+    assert result.trace["verifier_decision"]["decision"] == "override"
+    assert result.trace["reasoner_candidate"]["answer"] == "A"
+
+
+def test_v2_overrides_when_reasoner_response_is_invalid():
+    client = FakeLLMClient(
+        [
+            "query",
+            "I really don't know.",  # unparseable reasoner response
+            "I'll supply my own answer.\nFinal Answer: B",
+        ]
+    )
+    retriever = FakeRetriever(_make_passages())
+    config = make_config()
+
+    result = answer_question("Q?", {"A": "x", "B": "y"}, "V2", config, client, retriever)
+
+    assert result.trace["reasoner_candidate"]["answer"] is None
+    assert result.trace["reasoner_candidate"]["is_valid"] is False
+    assert result.trace["verifier_decision"]["decision"] == "override"
+    assert result.answer == "B"
+
+
+def test_v2_final_answer_is_the_verifiers_not_the_reasoners_raw_candidate():
+    client = FakeLLMClient(
+        [
+            "query",
+            "Reasoner explanation.\nFinal Answer: A",
+            "Verifier explanation.\nFinal Answer: B",
+        ]
+    )
+    retriever = FakeRetriever(_make_passages())
+    config = make_config()
+
+    result = answer_question("Q?", {"A": "x", "B": "y"}, "V2", config, client, retriever)
+
+    assert result.answer == "B"
+    assert result.explanation == "Verifier explanation."
+
+
+def test_v2_trace_includes_router_query_context_candidate_and_decision():
+    client = FakeLLMClient(
+        [
+            "cell wall synthesis inhibitors",
+            "Reasoner explanation.\nFinal Answer: C",
+            "Verifier explanation.\nFinal Answer: C",
+        ]
+    )
+    passages = _make_passages()
+    retriever = FakeRetriever(passages)
+    config = make_config()
+
+    result = answer_question("Q?", {"A": "x", "C": "z"}, "V2", config, client, retriever)
+
+    assert result.trace["router_query"] == "cell wall synthesis inhibitors"
+    assert result.trace["retrieved_passages"] == [
+        {"passage_id": p.passage_id, "source": p.source, "text": p.text, "score": p.score}
+        for p in passages
+    ]
+    assert result.trace["reasoner_candidate"] == {
+        "answer": "C",
+        "explanation": "Reasoner explanation.",
+        "is_valid": True,
+        "raw_response": "Reasoner explanation.\nFinal Answer: C",
+    }
+    assert result.trace["verifier_decision"] == {
+        "decision": "approve",
+        "answer": "C",
+        "explanation": "Verifier explanation.",
+        "is_valid": True,
+        "raw_response": "Verifier explanation.\nFinal Answer: C",
+    }
+
+
+def test_v2_sums_token_usage_and_latency_across_all_three_calls():
+    client = FakeLLMClient(["query", "Final Answer: A", "Final Answer: A"])
+    retriever = FakeRetriever(_make_passages())
+    config = make_config()
+
+    result = answer_question("Q?", {"A": "x", "B": "y"}, "V2", config, client, retriever)
+
+    # FakeLLMClient scripts 10/5/15 prompt/completion/total tokens and
+    # 0.01s latency per call -- three calls, so three times each.
+    assert result.prompt_tokens == 30
+    assert result.completion_tokens == 15
+    assert result.total_tokens == 45
+    assert result.latency_seconds == pytest.approx(0.03)
+
+
+def test_v2_without_an_injected_retriever_builds_a_default_one(monkeypatch):
+    client = FakeLLMClient(["query", "Final Answer: A", "Final Answer: A"])
+    fake_default_retriever = FakeRetriever(_make_passages())
+    monkeypatch.setattr(
+        "medqa_multiagent.entrypoint._default_retriever",
+        lambda config: fake_default_retriever,
+    )
+    config = make_config()
+
+    result = answer_question("Q?", {"A": "x", "B": "y"}, "V2", config, client)
+
+    assert result.variant == "V2"
     assert len(fake_default_retriever.calls) == 1

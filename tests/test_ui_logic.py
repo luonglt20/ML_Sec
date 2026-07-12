@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from medqa_multiagent import client_factory
 from medqa_multiagent.config import RunConfig
 from medqa_multiagent.rag.retriever import Passage
@@ -92,16 +94,16 @@ def test_get_answer_reports_unsupported_variant_as_a_readable_error(tmp_path, mo
     fake = FakeLLMClient([])
     monkeypatch.setattr(client_factory, "create_llm_client", lambda model: fake)
 
-    # V2 (not V1): V1 (RAG-only) is now implemented (see #3), so an
-    # "unsupported variant" test needs a variant still awaiting its own
-    # ticket.
+    # V3 (not V2): V2 (multi-agent Router->Reasoner->Verifier) is now
+    # implemented (see #4), so an "unsupported variant" test needs a
+    # variant still awaiting its own ticket.
     outcome = logic.get_answer(
-        "Q?", {"A": "x", "B": "y"}, "V2", config, tmp_path / "cache"
+        "Q?", {"A": "x", "B": "y"}, "V3", config, tmp_path / "cache"
     )
 
     assert outcome.result is None
     assert outcome.error is not None
-    assert "V2" in outcome.error
+    assert "V3" in outcome.error
 
 
 def test_get_answer_works_for_v1_with_no_ui_code_change(tmp_path, monkeypatch):
@@ -132,6 +134,45 @@ def test_get_answer_works_for_v1_with_no_ui_code_change(tmp_path, monkeypatch):
     assert "retrieved_passages" in outcome.result.trace
 
 
+def test_get_answer_works_for_v2_with_no_ui_code_change(tmp_path, monkeypatch):
+    """Confirms #4's awareness check: the UI (`ui/logic.get_answer`) needs
+    no code change for V2 -- `SUPPORTED_VARIANTS` already includes it, and
+    `answer_question` builds a default retriever on its own when the UI
+    (which never passes one) doesn't supply it. The trace's nested dicts
+    (`reasoner_candidate`, `verifier_decision`) render fine through the
+    UI's existing generic `render_trace`/`_render_trace_value` (dict/list
+    values go through `st.json`, everything else through `st.write`)."""
+    config_path = make_config_file(tmp_path / "config.json")
+    config, _ = logic.load_config(config_path)
+    assert config is not None
+    fake_llm = FakeLLMClient(
+        [
+            "query",
+            "Reasoner explanation.\nFinal Answer: A",
+            "Verifier explanation.\nFinal Answer: B",
+        ]
+    )
+    monkeypatch.setattr(client_factory, "create_llm_client", lambda model: fake_llm)
+    fake_retriever = FakeRetriever(
+        [Passage(passage_id="p1", source="BookA", text="relevant text", score=0.9)]
+    )
+    monkeypatch.setattr(
+        "medqa_multiagent.entrypoint._default_retriever", lambda config: fake_retriever
+    )
+
+    outcome = logic.get_answer("Q?", {"A": "x", "B": "y"}, "V2", config, tmp_path / "cache")
+
+    assert outcome.error is None
+    assert outcome.result is not None
+    assert outcome.result.variant == "V2"
+    # Final answer is the Verifier's decision, not the Reasoner's raw candidate.
+    assert outcome.result.answer == "B"
+    assert "router_query" in outcome.result.trace
+    assert "retrieved_passages" in outcome.result.trace
+    assert "reasoner_candidate" in outcome.result.trace
+    assert "verifier_decision" in outcome.result.trace
+
+
 def test_get_answer_resubmission_is_a_cache_hit_with_identical_result(tmp_path, monkeypatch):
     config_path = make_config_file(tmp_path / "config.json")
     config, _ = logic.load_config(config_path)
@@ -154,3 +195,89 @@ def test_get_answer_resubmission_is_a_cache_hit_with_identical_result(tmp_path, 
     assert second_outcome.result is not None
     assert second_outcome.result.answer == first_outcome.result.answer
     assert second_outcome.result.explanation == first_outcome.result.explanation
+
+
+def test_load_saved_questions_returns_empty_list_when_file_is_missing(tmp_path):
+    assert logic.load_saved_questions(tmp_path / "does-not-exist.jsonl") == []
+
+
+def test_save_question_then_load_returns_it_back(tmp_path):
+    path = tmp_path / "saved.jsonl"
+
+    saved = logic.save_question("Q?", {"A": "x", "B": "y"}, path=path)
+
+    loaded = logic.load_saved_questions(path)
+    assert len(loaded) == 1
+    assert loaded[0].question == "Q?"
+    assert loaded[0].options == {"A": "x", "B": "y"}
+    assert loaded[0].saved_at == saved.saved_at
+    assert loaded[0].expected_answer is None
+    assert loaded[0].question_id is None
+
+
+def test_save_question_records_expected_answer_and_question_id_when_given(tmp_path):
+    path = tmp_path / "saved.jsonl"
+
+    logic.save_question(
+        "Q?", {"A": "x"}, expected_answer="A", path=path, question_id="q123"
+    )
+
+    loaded = logic.load_saved_questions(path)
+    assert loaded[0].expected_answer == "A"
+    assert loaded[0].question_id == "q123"
+
+
+def test_save_question_appends_rather_than_overwrites(tmp_path):
+    path = tmp_path / "saved.jsonl"
+
+    logic.save_question("Q1?", {"A": "x"}, path=path)
+    logic.save_question("Q2?", {"A": "y"}, path=path)
+
+    loaded = logic.load_saved_questions(path)
+    assert [item.question for item in loaded] == ["Q1?", "Q2?"]
+
+
+def test_save_question_creates_parent_directories(tmp_path):
+    path = tmp_path / "nested" / "dir" / "saved.jsonl"
+
+    logic.save_question("Q?", {"A": "x"}, path=path)
+
+    assert path.exists()
+
+
+def test_delete_saved_question_removes_only_the_selected_one(tmp_path):
+    path = tmp_path / "saved.jsonl"
+    logic.save_question("Q1?", {"A": "x"}, path=path)
+    logic.save_question("Q2?", {"A": "y"}, path=path)
+    logic.save_question("Q3?", {"A": "z"}, path=path)
+
+    remaining = logic.delete_saved_question(1, path)
+
+    assert [item.question for item in remaining] == ["Q1?", "Q3?"]
+    assert [item.question for item in logic.load_saved_questions(path)] == ["Q1?", "Q3?"]
+
+
+def test_delete_saved_question_out_of_range_raises_index_error(tmp_path):
+    path = tmp_path / "saved.jsonl"
+    logic.save_question("Q1?", {"A": "x"}, path=path)
+
+    with pytest.raises(IndexError):
+        logic.delete_saved_question(5, path)
+
+
+def test_clear_saved_questions_empties_the_file(tmp_path):
+    path = tmp_path / "saved.jsonl"
+    logic.save_question("Q1?", {"A": "x"}, path=path)
+    logic.save_question("Q2?", {"A": "y"}, path=path)
+
+    logic.clear_saved_questions(path)
+
+    assert logic.load_saved_questions(path) == []
+
+
+def test_clear_saved_questions_is_a_no_op_when_nothing_was_ever_saved(tmp_path):
+    path = tmp_path / "saved.jsonl"
+
+    logic.clear_saved_questions(path)  # should not raise
+
+    assert logic.load_saved_questions(path) == []

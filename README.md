@@ -32,6 +32,19 @@ Work in progress, built ticket by ticket. Currently implemented:
   needs). Retrieved passages are recorded in the prediction/trace record's
   `trace.retrieved_passages`. Both the embedding and retrieval calls are
   on-disk cached, exactly like the LLM client.
+- **V2 multi-agent variant (Router → Reasoner → Verifier)** — three LLM
+  calls per question, reusing the same RAG module as V1. The Router
+  formulates a retrieval query from the raw question (rather than
+  retrieving on the question's raw text, unlike V1); the Reasoner produces
+  a candidate answer/explanation grounded in the passages that query
+  retrieved; the Verifier reviews that candidate exactly once and either
+  approves it or overrides it with its own corrected answer/explanation --
+  single-pass only, with no revision loop back to the Reasoner. The
+  prediction/trace record's final answer is always the Verifier's
+  decision, and `trace` records the Router's query (`router_query`), the
+  retrieved passages (`retrieved_passages`), the Reasoner's candidate
+  (`reasoner_candidate`), and the Verifier's decision (`verifier_decision`,
+  `"approve"` or `"override"`).
 
 ## Data
 
@@ -138,6 +151,16 @@ disk (`.cache/embeddings/`, `.cache/retrieval/` by default) just like the
 LLM client -- override those locations with `--rag-index-dir`,
 `--embedding-cache-dir`, and `--retrieval-cache-dir` if needed.
 
+Pass `--variant V2` to run the 3-agent Router->Reasoner->Verifier
+multi-agent pipeline (also requires the RAG index -- V2 reuses V1's RAG
+module via the same retriever stack, so the same `--rag-index-dir`/
+`--embedding-cache-dir`/`--retrieval-cache-dir` flags apply). Each of the
+three agent calls is cached/logged independently; `run`'s prediction/trace
+records include `trace.router_query`, `trace.retrieved_passages`,
+`trace.reasoner_candidate`, and `trace.verifier_decision`, and the
+recorded `predicted_answer`/`explanation` are always the Verifier's
+decision, not the Reasoner's raw candidate.
+
 ## Running the demo UI
 
 A minimal Streamlit app (`medqa_multiagent/ui/app.py`) for manually
@@ -192,12 +215,15 @@ read.
    - "Cache directory" defaults to `.cache/llm/`, the same on-disk cache
      the CLI uses. Leave it as-is to share cache hits with CLI runs, or
      point it elsewhere to isolate demo traffic.
+   - "Saved questions file" defaults to `.cache/ui/saved_questions.jsonl`
+     -- see step 6b below for what it's for. Git-ignored, like the rest of
+     `.cache/`.
 
 5. **Pick a variant** from the dropdown (only variants
    `entrypoint.SUPPORTED_VARIANTS` currently reports as implemented are
-   offered -- `V0` and `V1` so far). Picking `V1` requires the RAG index
-   to already be built (see "RAG index" above) -- if it isn't, you'll see
-   a readable error instead of a stack trace.
+   offered -- `V0`, `V1`, and `V2` so far). Picking `V1` or `V2` requires
+   the RAG index to already be built (see "RAG index" above) -- if it
+   isn't, you'll see a readable error instead of a stack trace.
 
 6. **Type/paste a question stem** and fill in all four options (A-D) in
    the main panel, or click "🎲 Load random example" to fill them in
@@ -206,6 +232,23 @@ read.
    test split (`data/test.jsonl`) is never read by this UI. When a loaded
    example is showing unedited, an info box displays that question's
    dataset-recorded expected answer.
+
+   **6b. Save/reload a question for repeated testing.** Found a question
+   that's hard (e.g. the model keeps getting it wrong, or you want to
+   compare variants/prompts on it) and want to run it again later without
+   retyping it? Click "💾 Save this question" (next to "Get answer") to
+   append the current question/options to a local, on-disk file (the
+   "Saved questions file" path from the sidebar -- `.cache/ui/
+   saved_questions.jsonl` by default). If it was an unedited loaded
+   example, its dataset-recorded expected answer is saved alongside it too.
+   Saved questions persist across app restarts (it's a plain file, not
+   just in-memory session state) and show up in the "💾 Saved questions"
+   dropdown next to "Load random example": pick one and click "📂 Load
+   selected" to refill the form with it (including its expected answer,
+   if it has one), "🗑️ Delete selected" to remove just that one, or
+   "🧹 Clear all saved questions" to empty the whole file. This is purely
+   a manual-testing convenience -- saved questions are never read by the
+   CLI/evaluation harness.
 
 7. **Click "Get answer"**. On success you'll see:
    - the predicted answer letter (shown side by side with the dataset's

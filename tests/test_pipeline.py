@@ -91,3 +91,34 @@ def test_run_dev_evaluation_v1_reuses_the_same_retriever_across_questions():
     run_dev_evaluation(questions, "V1", config, client, retriever)
 
     assert retriever.calls == [("Q1?", config.rag_top_k), ("Q2?", config.rag_top_k)]
+
+
+def test_run_dev_evaluation_v2_records_full_trace_and_verifiers_final_answer():
+    questions = [
+        Question(question_id="q1", question="Q1?", options={"A": "x", "B": "y"}, answer="B"),
+    ]
+    passages = [Passage(passage_id="p1", source="BookA", text="relevant text", score=0.9)]
+    retriever = FakeRetriever(passages)
+    client = FakeLLMClient(
+        [
+            "query",
+            "Reasoner explanation.\nFinal Answer: A",
+            "Verifier explanation.\nFinal Answer: B",
+        ]
+    )
+    config = make_config()
+
+    records = run_dev_evaluation(questions, "V2", config, client, retriever)
+
+    assert len(records) == 1
+    record = records[0]
+    assert record.variant == "V2"
+    # Final prediction is the Verifier's decision, not the Reasoner's
+    # raw candidate ('A').
+    assert record.predicted_answer == "B"
+    assert record.is_correct is True
+    assert record.trace["router_query"] == "query"
+    assert record.trace["retrieved_passages"][0]["passage_id"] == "p1"
+    assert record.trace["reasoner_candidate"]["answer"] == "A"
+    assert record.trace["verifier_decision"]["decision"] == "override"
+    assert record.trace["verifier_decision"]["answer"] == "B"

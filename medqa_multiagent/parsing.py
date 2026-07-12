@@ -89,3 +89,13 @@ def parse_final_answer(
         )
 
     return ParsedAnswer(is_valid=True, answer=letter, raw_text=raw_text)
+
+
+def strip_final_answer(raw_text: str) -> str:
+    """Return `raw_text` with any `Final Answer: <letter>` occurrence(s) removed.
+
+    Used to separate a response's free-text explanation from the required
+    answer-line convention, without affecting `parse_final_answer`'s
+    strict validity judgment (which still sees the original, unmodified text).
+    """
+    return _FINAL_ANSWER_PATTERN.sub("", raw_text).strip()

@@ -3,7 +3,8 @@ import logging
 from medqa_multiagent import client_factory
 from medqa_multiagent.config import RunConfig
 
-from fakes import FakeLLMClient
+from tests.fakes import FakeLLMClient
+
 
 
 def make_config(**overrides):

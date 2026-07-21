@@ -1,7 +1,8 @@
 from medqa_multiagent.rag.retrieval_cache import OnDiskRetrievalCache
 from medqa_multiagent.rag.retriever import Passage
 
-from fakes import FakeRetriever
+from tests.fakes import FakeRetriever
+
 
 
 def make_passages():

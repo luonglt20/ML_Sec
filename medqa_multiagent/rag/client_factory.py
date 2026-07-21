@@ -17,6 +17,7 @@ on immediately.
 from __future__ import annotations
 
 import functools
+import time
 from pathlib import Path
 from typing import Union
 
@@ -48,7 +49,10 @@ def _load_passages(index_dir: Path) -> dict:
     chunks = read_chunks(passages_path)
     return {
         chunk.chunk_id: PassageRecord(
-            passage_id=chunk.chunk_id, source=chunk.source, text=chunk.text
+            passage_id=chunk.chunk_id,
+            source=chunk.source,
+            text=chunk.text,
+            parent_id=chunk.parent_id,  # None for flat chunks; set for child chunks
         )
         for chunk in chunks
     }
@@ -56,22 +60,67 @@ def _load_passages(index_dir: Path) -> dict:
 
 @functools.lru_cache(maxsize=None)
 def _build_retriever_cached(
-    index_dir: str, embedding_cache_dir: str, retrieval_cache_dir: str
+    index_dir: str,
+    embedding_cache_dir: str,
+    retrieval_cache_dir: str,
+    retrieval_buffer: int,
+    use_hybrid: bool,
+    relevance_threshold: float,
+    use_option_boosting: bool,
+    option_boost_weight: float,
+    dynamic_top_k: bool,
+    heuristic_compression: bool,
+    use_reranker: bool,
+    use_query_pruning: bool,
+    use_synonym_expansion: bool,
+    use_mmr: bool = False,
+    mmr_lambda: float = 0.7,
+    use_hyde: bool = False,
 ) -> Retriever:
-    """Build (and process-wide cache) the retriever stack for one index dir.
-
-    Loading the FAISS index and MedCPT model weights is expensive, so this
-    is memoized per `(index_dir, embedding_cache_dir, retrieval_cache_dir)`
-    -- repeated calls (e.g. once per question in a dev-set run) reuse the
-    same in-memory retriever rather than reloading the index/model each time.
-    """
+    """Build (and process-wide cache) the retriever stack for one index dir."""
+    _t0 = time.monotonic()
     index_path = Path(index_dir)
     passages = _load_passages(index_path)
     vector_index = FaissFlatIndex.load(index_path)
+
+    bm25_index = None
+    if use_hybrid:
+        bm25_path = index_path / "bm25.json"
+        if bm25_path.exists():
+            from medqa_multiagent.rag.bm25 import BM25Index
+            bm25_index = BM25Index.load(bm25_path)
+            print(f"[RAG] Loaded BM25 sparse index from {bm25_path}", flush=True)
+        else:
+            print(f"[RAG] Warning: use_hybrid is True but BM25 index not found at {bm25_path}", flush=True)
+
     embedding_client: EmbeddingClient = OnDiskEmbeddingCache(
         MedCptEmbeddingClient(), embedding_cache_dir
     )
-    retriever = IndexBackedRetriever(embedding_client, vector_index, passages)
+    retriever = IndexBackedRetriever(
+        embedding_client,
+        vector_index,
+        passages,
+        retrieval_buffer=retrieval_buffer,
+        bm25_index=bm25_index,
+        relevance_threshold=relevance_threshold,
+        use_option_boosting=use_option_boosting,
+        option_boost_weight=option_boost_weight,
+        dynamic_top_k=dynamic_top_k,
+        heuristic_compression=heuristic_compression,
+        use_reranker=use_reranker,
+        use_query_pruning=use_query_pruning,
+        use_synonym_expansion=use_synonym_expansion,
+        use_mmr=use_mmr,
+        mmr_lambda=mmr_lambda,
+        use_hyde=use_hyde,
+    )
+    _elapsed = time.monotonic() - _t0
+    mode_str = "hybrid" if bm25_index is not None else "dense"
+    print(
+        f"[RAG] Retriever loaded in {_elapsed:.1f}s "
+        f"({len(passages)} passages, mode={mode_str}, threshold={relevance_threshold})",
+        flush=True,
+    )
     return OnDiskRetrievalCache(retriever, retrieval_cache_dir, index_id=str(index_path))
 
 
@@ -81,24 +130,25 @@ def build_retriever(
     embedding_cache_dir: Union[str, Path] = DEFAULT_EMBEDDING_CACHE_DIR,
     retrieval_cache_dir: Union[str, Path] = DEFAULT_RETRIEVAL_CACHE_DIR,
 ) -> Retriever:
-    """Build the standard cache-wrapped `Retriever` for `config.rag_index_dir`.
-
-    Args:
-        config: This run's configuration; `config.rag_index_dir` is used
-            unless `index_dir` overrides it.
-        index_dir: Directory holding the pre-built FAISS index + passage
-            metadata (default: `config.rag_index_dir`).
-        embedding_cache_dir: On-disk cache directory for embedding calls.
-        retrieval_cache_dir: On-disk cache directory for retrieval calls.
-
-    Raises:
-        FileNotFoundError: if no pre-built index/passage metadata exists
-            at the resolved `index_dir` -- run `scripts/build_rag_index.py`
-            first.
-        ImportError: if `faiss`/`transformers`/`torch` aren't installed
-            (install the `rag` extra: `pip install -e ".[rag]"`).
-    """
+    """Build the standard cache-wrapped `Retriever` for `config.rag_index_dir`."""
     resolved_index_dir = str(index_dir if index_dir is not None else config.rag_index_dir)
     return _build_retriever_cached(
-        resolved_index_dir, str(embedding_cache_dir), str(retrieval_cache_dir)
+        resolved_index_dir,
+        str(embedding_cache_dir),
+        str(retrieval_cache_dir),
+        config.rag_retrieval_buffer,
+        config.rag_use_hybrid,
+        config.rag_relevance_threshold,
+        config.rag_use_option_boosting,
+        config.rag_option_boost_weight,
+        config.rag_dynamic_top_k,
+        config.rag_heuristic_compression,
+        config.rag_use_reranker,
+        config.rag_use_query_pruning,
+        config.rag_use_synonym_expansion,
+        getattr(config, "rag_use_mmr", False),
+        getattr(config, "rag_mmr_lambda", 0.7),
+        getattr(config, "rag_use_hyde", False),
     )
+
+

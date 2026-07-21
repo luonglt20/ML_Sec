@@ -11,7 +11,8 @@ from medqa_multiagent.llm_client import (
     create_llm_client,
 )
 
-from fakes import FakeLLMClient
+from tests.fakes import FakeLLMClient
+
 
 
 def test_create_llm_client_unknown_model_raises(monkeypatch):

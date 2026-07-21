@@ -6,7 +6,8 @@ from medqa_multiagent.config import RunConfig
 from medqa_multiagent.entrypoint import answer_question
 from medqa_multiagent.rag.retriever import Passage
 
-from fakes import FakeLLMClient, FakeRetriever
+from tests.fakes import FakeLLMClient, FakeRetriever
+
 
 
 def make_config(**overrides: Any) -> RunConfig:
@@ -92,11 +93,10 @@ def test_unsupported_variant_raises_not_implemented():
     client = FakeLLMClient(["Final Answer: A"])
     config = make_config()
 
-    # V3 (not V2): V2 (multi-agent Router->Reasoner->Verifier) is now
-    # implemented (see #4), so an "unsupported variant" test needs a
-    # variant still awaiting its own ticket.
+    # V5 is an unsupported variant
     with pytest.raises(NotImplementedError):
-        answer_question("Q?", {"A": "x", "B": "y"}, "V3", config, client)
+        answer_question("Q?", {"A": "x", "B": "y"}, "V5", config, client)
+
 
 
 def _make_passages():

@@ -14,9 +14,32 @@ def make_valid_data(**overrides):
         "seed": 42,
         "rag_top_k": 3,
         "rag_chunk_size": 256,
+        "rag_child_chunk_size": 64,
+        "rag_parent_chunk_size": 512,
+        "rag_max_passage_tokens": 200,
+        "rag_retrieval_buffer": 2,
+        "rag_use_hybrid": False,
+        "rag_use_hyde": False,
+        "rag_relevance_threshold": 0.0,
+        "rag_max_retrieval_loops": 2,
+        "rag_enable_backtracking": False,
+        "rag_enable_debate": False,
+        "rag_use_multi_query": False,
+        "rag_use_option_boosting": False,
+        "rag_option_boost_weight": 0.05,
+        "rag_dynamic_top_k": False,
+        "rag_heuristic_compression": False,
+        "rag_adaptive_routing": False,
+        "rag_use_reranker": False,
+        "rag_use_query_pruning": False,
+        "rag_use_synonym_expansion": False,
+        "rag_use_mmr": False,
+        "rag_mmr_lambda": 0.7,
         "memory_top_k": 3,
         "rag_index_dir": "data/rag_index",
+        "rag_chunk_overlap": 32,
     }
+
     data.update(overrides)
     return data
 
@@ -52,6 +75,12 @@ def test_config_is_immutable():
         {"rag_top_k": 0},
         {"rag_chunk_size": 0},
         {"memory_top_k": 0},
+        {"rag_child_chunk_size": 0},
+        {"rag_parent_chunk_size": 0},
+        # parent_size must be >= child_size
+        {"rag_child_chunk_size": 128, "rag_parent_chunk_size": 64},
+        {"rag_max_passage_tokens": 0},
+        {"rag_retrieval_buffer": -1},
     ],
 )
 def test_invalid_field_values_raise(overrides):

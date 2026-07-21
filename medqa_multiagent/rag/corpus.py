@@ -51,22 +51,29 @@ def write_chunks(chunks: List[Chunk], path: Union[str, Path]) -> None:
 
     Creates parent directories as needed. This is the on-disk format
     `read_chunks` and `rag.index`/`rag.retriever` read back at query time.
+
+    The optional ``parent_id`` field is written when present (Parent-Child
+    RAG chunks), and omitted for plain flat chunks so existing passage files
+    stay compact and backward-compatible.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         for chunk in chunks:
-            fh.write(
-                json.dumps(
-                    {"chunk_id": chunk.chunk_id, "source": chunk.source, "text": chunk.text},
-                    ensure_ascii=True,
-                )
-            )
+            record: dict = {"chunk_id": chunk.chunk_id, "source": chunk.source, "text": chunk.text}
+            if chunk.parent_id is not None:
+                record["parent_id"] = chunk.parent_id
+            fh.write(json.dumps(record, ensure_ascii=True))
             fh.write("\n")
 
 
 def read_chunks(path: Union[str, Path]) -> List[Chunk]:
-    """Read back a chunk-metadata JSONL file written by `write_chunks`."""
+    """Read back a chunk-metadata JSONL file written by `write_chunks`.
+
+    Reads the optional ``parent_id`` field when present (Parent-Child RAG
+    files), and defaults it to ``None`` for flat-chunk files that predate
+    the hierarchical format -- fully backward-compatible.
+    """
     chunks: List[Chunk] = []
     with open(path, "r", encoding="utf-8") as fh:
         for line in fh:
@@ -75,6 +82,11 @@ def read_chunks(path: Union[str, Path]) -> List[Chunk]:
                 continue
             data = json.loads(line)
             chunks.append(
-                Chunk(chunk_id=data["chunk_id"], source=data["source"], text=data["text"])
+                Chunk(
+                    chunk_id=data["chunk_id"],
+                    source=data["source"],
+                    text=data["text"],
+                    parent_id=data.get("parent_id"),  # None for legacy files
+                )
             )
     return chunks

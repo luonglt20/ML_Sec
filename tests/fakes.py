@@ -8,7 +8,8 @@ agent/RAG internals.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
+
 
 from medqa_multiagent.llm_client import LLMResponse
 from medqa_multiagent.rag.retriever import Passage
@@ -72,9 +73,10 @@ class FakeRetriever:
         self._passages = list(passages)
         self.calls: List[Tuple[str, int]] = []
 
-    def retrieve(self, query: str, top_k: int) -> List[Passage]:
+    def retrieve(self, query: str, top_k: int, options: Optional[Any] = None) -> List[Passage]:
         self.calls.append((query, top_k))
         return list(self._passages[:top_k])
+
 
 
 class FakeEmbeddingClient:

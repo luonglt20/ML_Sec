@@ -218,7 +218,22 @@ __marimo__/
 .streamlit/secrets.toml
 .DS_Store
 
-# RAG index build artifacts (large; rebuilt locally via
-# scripts/build_rag_index.py, never checked in -- see README.md "RAG index").
 /data/rag_corpus/
 /data/rag_index/
+
+# Local configs and API keys
+/API Key
+/API Key copy
+/API Key*
+/.env
+
+
+# Local tests
+/live_test/
+/scripts/run_live_benchmark.py
+
+# Local documentation / progress files
+/target-source.md
+/PLAN.md
+/triage-labels.md
+

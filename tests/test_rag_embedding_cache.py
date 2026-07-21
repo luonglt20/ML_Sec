@@ -1,6 +1,7 @@
 from medqa_multiagent.rag.embedding_cache import OnDiskEmbeddingCache
 
-from fakes import FakeEmbeddingClient
+from tests.fakes import FakeEmbeddingClient
+
 
 
 def test_embed_query_cache_hit_avoids_a_second_call(tmp_path):

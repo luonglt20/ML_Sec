@@ -59,7 +59,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from medqa_multiagent.config import RunConfig  # noqa: E402
 from medqa_multiagent.rag import client_factory as rag_client_factory  # noqa: E402
-from medqa_multiagent.rag.chunking import chunk_documents  # noqa: E402
+from medqa_multiagent.rag.chunking import chunk_documents, hierarchical_documents  # noqa: E402
 from medqa_multiagent.rag.corpus import load_corpus_documents, write_chunks  # noqa: E402
 from medqa_multiagent.rag.embeddings import MedCptEmbeddingClient  # noqa: E402
 from medqa_multiagent.rag.index import FaissFlatIndex  # noqa: E402
@@ -158,6 +158,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="Skip re-downloading the corpus; re-chunk/re-embed/re-index "
         "whatever is already in --corpus-dir.",
     )
+    parser.add_argument(
+        "--no-hierarchical",
+        action="store_true",
+        help="Use legacy flat chunking (chunk_documents with rag_chunk_size) instead of "
+        "the default Parent-Child hierarchical chunking (rag_child_chunk_size / "
+        "rag_parent_chunk_size). The hierarchical index cannot be used with an "
+        "older pipeline that doesn't know about parent_id.",
+    )
     args = parser.parse_args(argv)
 
     config = RunConfig.from_json_file(args.config)
@@ -171,32 +179,66 @@ def main(argv: Optional[List[str]] = None) -> int:
         write_corpus_documents(books, corpus_dir)
         print(f"  wrote raw corpus text to {corpus_dir}")
 
-    print(f"Chunking corpus at ~{config.rag_chunk_size} tokens/chunk ...")
+    use_hierarchical = not args.no_hierarchical
     documents = load_corpus_documents(corpus_dir)
-    chunks = chunk_documents(documents, config.rag_chunk_size)
-    print(f"  produced {len(chunks)} chunk(s) from {len(documents)} document(s)")
+
+    if use_hierarchical:
+        child_size = config.rag_child_chunk_size
+        parent_size = config.rag_parent_chunk_size
+        print(
+            f"Chunking corpus (Parent-Child RAG: child={child_size} tokens, "
+            f"parent={parent_size} tokens) ..."
+        )
+        all_chunks = hierarchical_documents(documents, child_size, parent_size)
+        # Only child chunks (parent_id is not None) are embedded and indexed.
+        # Parent chunks are stored in passages.jsonl for context lookup only.
+        child_chunks = [c for c in all_chunks if c.parent_id is not None]
+        parent_chunks = [c for c in all_chunks if c.parent_id is None]
+        print(
+            f"  produced {len(child_chunks)} child chunk(s) and "
+            f"{len(parent_chunks)} parent chunk(s) from {len(documents)} document(s)"
+        )
+        embed_chunks = child_chunks  # only children go into FAISS
+        write_chunks_list = all_chunks  # both parents+children stored on disk
+    else:
+        print(f"Chunking corpus (flat, ~{config.rag_chunk_size} tokens/chunk) ...")
+        all_chunks = chunk_documents(documents, config.rag_chunk_size)
+        print(f"  produced {len(all_chunks)} chunk(s) from {len(documents)} document(s)")
+        embed_chunks = all_chunks
+        write_chunks_list = all_chunks
 
     passages_path = index_dir / rag_client_factory.PASSAGES_FILENAME
-    write_chunks(chunks, passages_path)
-    print(f"  wrote passage metadata to {passages_path}")
+    write_chunks(write_chunks_list, passages_path)
+    print(f"  wrote passage metadata to {passages_path} ({len(write_chunks_list)} records)")
+
+    print("Building BM25 sparse index ...")
+    from medqa_multiagent.rag.bm25 import BM25Index
+    # BM25 is built over the exact same chunks that are FAISS-indexed (child chunks in hierarchical mode)
+    bm25_docs = [(chunk.chunk_id, chunk.text) for chunk in embed_chunks]
+    bm25_index = BM25Index.build(bm25_docs)
+    bm25_path = index_dir / "bm25.json"
+    bm25_index.save(bm25_path)
+    print(f"  wrote BM25 sparse index to {bm25_path}")
 
     print("Embedding passages with MedCPT (this is the slow, CPU-bound step) ...")
     embedder = MedCptEmbeddingClient()
     vectors: List[List[float]] = []
     batch_size = args.embedding_batch_size
-    for start in range(0, len(chunks), batch_size):
-        batch = chunks[start : start + batch_size]
+    for start in range(0, len(embed_chunks), batch_size):
+        batch = embed_chunks[start : start + batch_size]
         vectors.extend(embedder.embed_passages([chunk.text for chunk in batch]))
-        print(f"  embedded {min(start + batch_size, len(chunks))}/{len(chunks)} passages...")
+        print(f"  embedded {min(start + batch_size, len(embed_chunks))}/{len(embed_chunks)} passages...")
 
     print("Building FAISS flat index ...")
-    index = FaissFlatIndex.build(vectors, [chunk.chunk_id for chunk in chunks])
+    index = FaissFlatIndex.build(vectors, [chunk.chunk_id for chunk in embed_chunks])
     index.save(index_dir)
-    print(f"  wrote index to {index_dir}")
+    mode_label = "hierarchical" if use_hierarchical else "flat"
+    print(f"  wrote {mode_label} index to {index_dir}")
 
-    print(f"Done. {len(chunks)} passages indexed at {index_dir}.")
+    print(f"Done. {len(embed_chunks)} passages indexed ({mode_label}) at {index_dir}.")
     return 0
 
 
 if __name__ == "__main__":
     sys.exit(main())
+

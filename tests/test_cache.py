@@ -1,6 +1,7 @@
 from medqa_multiagent.cache import OnDiskLLMCache
 
-from fakes import FakeLLMClient
+from tests.fakes import FakeLLMClient
+
 
 
 def test_cache_miss_delegates_to_wrapped_client(tmp_path):

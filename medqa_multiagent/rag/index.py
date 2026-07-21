@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Protocol, Sequence, Tuple, Union
+from typing import List, Optional, Protocol, Sequence, Tuple, Union
 
 _INDEX_FILENAME = "index.faiss"
 _IDS_FILENAME = "passage_ids.json"
@@ -34,11 +34,16 @@ class PassageRecord:
         passage_id: Stable identifier (matches `chunking.Chunk.chunk_id`).
         source: The document (e.g. textbook name) this passage was cut from.
         text: The passage's text content.
+        parent_id: For Parent-Child RAG *child* records, the ``passage_id``
+            of the enclosing parent record whose ``text`` should be returned
+            to the LLM instead of this child's shorter text. ``None`` for
+            flat (non-hierarchical) records and for parent records themselves.
     """
 
     passage_id: str
     source: str
     text: str
+    parent_id: Optional[str] = None
 
 
 class VectorIndex(Protocol):

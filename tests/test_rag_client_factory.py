@@ -8,7 +8,8 @@ from medqa_multiagent.rag.chunking import Chunk
 from medqa_multiagent.rag.corpus import write_chunks
 from medqa_multiagent.rag.index import FaissFlatIndex
 
-from fakes import FakeEmbeddingClient
+from tests.fakes import FakeEmbeddingClient
+
 
 
 def make_config(**overrides):

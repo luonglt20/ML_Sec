@@ -26,13 +26,13 @@ DEFAULT_CACHE_DIR = ".cache/llm"
 def build_llm_client(
     config: RunConfig, cache_dir: Union[str, Path] = DEFAULT_CACHE_DIR
 ) -> LLMClient:
-    """Build the standard cache- and logging-wrapped `LLMClient` for `config.model`.
+    """Build the standard cache- and logging-wrapped `LLMClient` for `config.model`."""
+    if config.model in ("unified", "auto", "groq", "gemini", "deepseek"):
+        from .unified_llm_client import UnifiedLLMClient
+        inner: LLMClient = UnifiedLLMClient()
+    else:
+        inner = create_llm_client(config.model)
 
-    Raises:
-        UnknownModelError: if `config.model` has no registered provider.
-        RuntimeError: if the provider's required API key environment
-            variable isn't set.
-    """
-    base_client = create_llm_client(config.model)
-    cached_client = OnDiskLLMCache(base_client, cache_dir)
-    return LoggingLLMClient(cached_client)
+    cached = OnDiskLLMCache(inner, cache_dir)
+    return LoggingLLMClient(cached)
+

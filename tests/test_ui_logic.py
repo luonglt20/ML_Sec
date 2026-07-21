@@ -7,7 +7,8 @@ from medqa_multiagent.config import RunConfig
 from medqa_multiagent.rag.retriever import Passage
 from medqa_multiagent.ui import logic
 
-from fakes import FakeLLMClient, FakeRetriever
+from tests.fakes import FakeLLMClient, FakeRetriever
+
 
 
 def make_config_file(path, **overrides):
@@ -94,16 +95,15 @@ def test_get_answer_reports_unsupported_variant_as_a_readable_error(tmp_path, mo
     fake = FakeLLMClient([])
     monkeypatch.setattr(client_factory, "create_llm_client", lambda model: fake)
 
-    # V3 (not V2): V2 (multi-agent Router->Reasoner->Verifier) is now
-    # implemented (see #4), so an "unsupported variant" test needs a
-    # variant still awaiting its own ticket.
+    # V5 is unsupported
     outcome = logic.get_answer(
-        "Q?", {"A": "x", "B": "y"}, "V3", config, tmp_path / "cache"
+        "Q?", {"A": "x", "B": "y"}, "V5", config, tmp_path / "cache"
     )
 
     assert outcome.result is None
     assert outcome.error is not None
-    assert "V3" in outcome.error
+    assert "V5" in outcome.error
+
 
 
 def test_get_answer_works_for_v1_with_no_ui_code_change(tmp_path, monkeypatch):

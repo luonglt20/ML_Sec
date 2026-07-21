@@ -40,7 +40,9 @@ class RunConfig:
         rag_top_k: Number of retrieved passages returned by the RAG module
             for each query.
         rag_chunk_size: Target chunk size (in tokens) used when indexing the
-            retrieval corpus.
+            retrieval corpus (legacy flat chunking -- kept for backward compat
+            with existing config files and the original ``chunk_documents``
+            path in ``build_rag_index.py``).
         memory_top_k: Number of case-memory exemplars retrieved per question
             for variants that use long-term memory (V3/V4).
         rag_index_dir: Directory containing the pre-built RAG retrieval
@@ -49,6 +51,19 @@ class RunConfig:
             existing config files (from before V1/RAG landed) keep working
             unchanged -- this field has a default and is therefore optional
             in `from_mapping`/`from_json_file`.
+        rag_child_chunk_size: Token size of *child* chunks indexed into FAISS
+            for Parent-Child RAG (smaller → higher embedding precision).
+            Defaults to 64.
+        rag_parent_chunk_size: Token size of *parent* chunks returned as full
+            context to the LLM when a child chunk is retrieved. Should be a
+            whole multiple of ``rag_child_chunk_size``. Defaults to 512.
+        rag_max_passage_tokens: Maximum (approximate) tokens per passage
+            included in any LLM prompt. Passages exceeding this are truncated
+            with a ``[Truncated]`` marker so the LLM knows context is partial.
+            Defaults to 200.
+        rag_retrieval_buffer: Extra candidate passages fetched from FAISS
+            beyond ``rag_top_k`` to absorb deduplication losses when multiple
+            child chunks resolve to the same parent. Defaults to 2.
     """
 
     model: str
@@ -60,6 +75,29 @@ class RunConfig:
     rag_chunk_size: int
     memory_top_k: int
     rag_index_dir: str = "data/rag_index"
+    rag_chunk_overlap: int = 32
+    rag_child_chunk_size: int = 64
+    rag_parent_chunk_size: int = 512
+    rag_max_passage_tokens: int = 200
+    rag_retrieval_buffer: int = 2
+    rag_use_hybrid: bool = False
+    rag_use_hyde: bool = False
+    rag_relevance_threshold: float = 0.0
+    rag_max_retrieval_loops: int = 2
+    rag_enable_backtracking: bool = False
+    rag_enable_debate: bool = False
+    rag_use_multi_query: bool = False
+    rag_use_option_boosting: bool = False
+    rag_option_boost_weight: float = 0.05
+    rag_dynamic_top_k: bool = False
+    rag_heuristic_compression: bool = False
+    rag_adaptive_routing: bool = False
+    rag_use_reranker: bool = False
+    rag_use_query_pruning: bool = False
+    rag_use_synonym_expansion: bool = False
+    rag_use_mmr: bool = False
+    rag_mmr_lambda: float = 0.7
+
 
     def __post_init__(self) -> None:
         if not isinstance(self.model, str) or not self.model.strip():
@@ -76,8 +114,28 @@ class RunConfig:
             raise ValueError("rag_top_k must be a positive integer")
         if self.rag_chunk_size <= 0:
             raise ValueError("rag_chunk_size must be a positive integer")
+        if self.rag_chunk_overlap < 0 or self.rag_chunk_overlap >= self.rag_chunk_size:
+            raise ValueError(
+                "rag_chunk_overlap must be a non-negative integer less than rag_chunk_size"
+            )
         if self.memory_top_k <= 0:
             raise ValueError("memory_top_k must be a positive integer")
+        if self.rag_child_chunk_size <= 0:
+            raise ValueError("rag_child_chunk_size must be a positive integer")
+        if self.rag_parent_chunk_size <= 0:
+            raise ValueError("rag_parent_chunk_size must be a positive integer")
+        if self.rag_parent_chunk_size < self.rag_child_chunk_size:
+            raise ValueError(
+                "rag_parent_chunk_size must be >= rag_child_chunk_size"
+            )
+        if self.rag_max_passage_tokens <= 0:
+            raise ValueError("rag_max_passage_tokens must be a positive integer")
+        if self.rag_retrieval_buffer < 0:
+            raise ValueError("rag_retrieval_buffer must be a non-negative integer")
+        if self.rag_relevance_threshold < 0:
+            raise ValueError("rag_relevance_threshold must be non-negative")
+        if self.rag_max_retrieval_loops <= 0:
+            raise ValueError("rag_max_retrieval_loops must be a positive integer")
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> "RunConfig":

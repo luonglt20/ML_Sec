@@ -9,7 +9,8 @@ from medqa_multiagent.rag.corpus import write_chunks
 from medqa_multiagent.rag.retriever import Passage
 from medqa_multiagent.records import read_prediction_records
 
-from fakes import FakeEmbeddingClient, FakeLLMClient, FakeRetriever
+from tests.fakes import FakeEmbeddingClient, FakeLLMClient, FakeRetriever
+
 
 pytest.importorskip("faiss")
 from medqa_multiagent.rag.index import FaissFlatIndex  # noqa: E402

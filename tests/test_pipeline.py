@@ -5,7 +5,8 @@ from medqa_multiagent.data import Question
 from medqa_multiagent.pipeline import run_dev_evaluation
 from medqa_multiagent.rag.retriever import Passage
 
-from fakes import FakeLLMClient, FakeRetriever
+from tests.fakes import FakeLLMClient, FakeRetriever
+
 
 
 def make_config(**overrides: Any) -> RunConfig:

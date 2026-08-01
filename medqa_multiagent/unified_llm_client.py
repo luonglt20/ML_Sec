@@ -27,27 +27,11 @@ class UnifiedLLMClient(LLMClient):
     def __init__(self, timeout: float = 60.0) -> None:
         self._timeout = timeout
 
-        # Load keys from .env / environment
-        self._groq_keys = self._load_keys("GROQ_API_KEY", count=6)
-        if not self._groq_keys:
-            self._groq_keys = [
-                "gsk_REDACTED",
-                "gsk_REDACTED",
-                "gsk_REDACTED",
-                "gsk_REDACTED",
-                "gsk_REDACTED",
-                "gsk_REDACTED",
-            ]
-
-        self._gemini_keys = self._load_keys("GEMINI_API_KEY", count=2)
-        if not self._gemini_keys:
-            self._gemini_keys = [
-                "AQ-REDACTED",
-                "AQ-REDACTED",
-            ]
-
+        # Load keys strictly from .env / environment
+        self._groq_keys = self._load_keys("GROQ_API_KEY", count=10)
+        self._gemini_keys = self._load_keys("GEMINI_API_KEY", count=5)
         ds_keys = self._load_keys("DEEPSEEK_API_KEY", count=1)
-        self._deepseek_key = ds_keys[0] if ds_keys else "sk-REDACTED"
+        self._deepseek_key = ds_keys[0] if ds_keys else ""
 
         # Key Index Pointers
         self._groq_idx = 0

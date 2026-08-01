@@ -188,7 +188,7 @@ def predict_single_variant(req: PredictRequest):
             "explanation": res.explanation,
             "latency_seconds": round(elapsed, 2),
             "total_tokens": res.total_tokens,
-            "agent_trace": res.agent_trace,
+            "agent_trace": getattr(res, "agent_trace", getattr(res, "trace", {})),
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))

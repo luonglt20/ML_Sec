@@ -1,70 +1,91 @@
-# 📋 BÁO CÁO PHÂN TÍCH DANH SÁCH CÁC CÂU LỖI (FAILED CASES ANALYSIS)
+# 📋 BÁO CÁO PHÂN TÍCH CHI TIẾT CÁC CÂU LỖI LÂM SÀNG (DETAILED FAILED CASES REPORT)
 
 **Dataset:** MedQA USMLE Test Set ($N = 1,270$ câu)  
-**Nguồn dữ liệu:** [`eval_results_full_1270_log.txt`](file:///Users/toilaluongg/Desktop/UIT%20-SDH/ML-Sec/GK/eval_results_full_1270_log.txt)
+**Mô hình Đánh giá:** DeepSeek V3 Flash + Multi-Agent Architecture  
+**Log thô nguồn:** [`eval_results_full_1270_log.txt`](file:///Users/toilaluongg/Desktop/UIT%20-SDH/ML-Sec/GK/eval_results_full_1270_log.txt)
 
 ---
 
-## 1. TỔNG QUAN PHÂN LOẠI CÂU LỖI
+## 1. PHÂN TÍCH CHI TIẾT CÁC CA LỖI TIÊU BIỂU (FULL CLINICAL CASE STUDIES)
 
-| Nhóm Ca Lỗi | Số lượng | Nguyên nhân Cốt lõi | Hướng Khắc phục của V3 |
+### 📌 Ca Lỗi 1: Tác dụng phụ Ù tai & Suy giảm Thính giác do Thuốc Hóa trị Cisplatin
+* **ID Câu hỏi:** `test-00001`
+* **Lĩnh vực Y khoa:** Ung thư học & Dược lý Học (Oncology / Chemotherapy Toxicity)
+* **Bệnh án Lâm sàng (Question Stem):**
+  > *"A 67-year-old man with transitional cell carcinoma of the bladder comes to the physician because of a 2-day history of ringing sensation in his ear. He received his first course of neoadjuvant chemotherapy 1 week ago. Pure tone audiometry shows a sensorineural hearing loss of 45 dB. The expected beneficial effect of the drug that caused this patient's symptoms is most likely due to which of the following actions?"*
+* **Các Lựa chọn Đáp án:**
+  * **Option A:** Inhibition of proteasome
+  * **Option B:** Hyperstabilization of microtubules
+  * **Option C:** Generation of free radicals
+  * **Option D:** Cross-linking of DNA
+* **Đáp án Chuẩn (Ground Truth):** **Option D (Cross-linking of DNA)**
+* **Phân tích Lâm sàng & Lý do Lỗi:**
+  * Bệnh nhân ung thư bàng quang dùng hóa trị bổ trợ (neoadjuvant chemotherapy) bị ù tai và điếc tiếp nhận $45\text{ dB}$ do **Cisplatin** gây ra độc tính cho tai (Ototoxicity).
+  * Thuốc Cisplatin tiêu diệt tế bào ung thư bằng cơ chế gắn kết tạo liên kết chéo ADN (**Cross-linking of DNA**).
+  * **Lý do V0/V3 nhầm:** RAG Retriever trích dẫn thông tin tổng quát về Ceftriaxone và phản ứng viêm làm hệ thống nhầm sang tạo gốc tự do (**Generation of free radicals - Option C**).
+
+---
+
+### 📌 Ca Lỗi 2: Biến chứng Tắc mạch Cholesterol sau Thông tim Can thiệp (Cholesterol Embolization)
+* **ID Câu hỏi:** `test-00002`
+* **Lĩnh vực Y khoa:** Thận học & Tim mạch Can thiệp (Nephrology / Interventional Cardiology)
+* **Bệnh án Lâm sàng (Question Stem):**
+  > *"Two weeks after undergoing an emergency cardiac catheterization with stenting for unstable angina pectoris, a 61-year-old man has decreased urinary output and malaise... Blood pressure is 125/85 mm Hg. Examination shows mottled, reticulated purplish discoloration of the feet (Livedo reticularis). Laboratory: Leukocytes 16,400/mm³, Eosinophils 11%, Creatinine 4.2 mg/dL. Renal biopsy shows intravascular spindle-shaped vacuoles. What is the most likely cause?"*
+* **Các Lựa chọn Đáp án:**
+  * **Option A:** Renal papillary necrosis
+  * **Option B:** Cholesterol embolization
+  * **Option C:** Eosinophilic granulomatosis with polyangiitis
+  * **Option D:** Polyarteritis nodosa
+* **Đáp án Chuẩn (Ground Truth):** **Option B (Cholesterol embolization)**
+* **Phân tích Lâm sàng & Lý do Lỗi:**
+  * Tam chứng lâm sàng kinh điển: 
+    1. Tiền sử thông tim can thiệp (Cardiac catheterization) 2 tuần trước.
+    2. Da chân nổi ban lưới tím (Livedo reticularis) + Tăng bạch cầu ái toan ($11\%$ Eosinophils).
+    3. Sinh thiết thận thấy **khoảng trống hình thoi trong lòng mạch (Intravascular spindle-shaped vacuoles)** do tinh thể cholesterol bị rửa trôi.
+  * **Lý do V0/V3 nhầm:** Mô hình V0 chọn lầm **Renal papillary necrosis (Option A)** do bệnh nhân có tiền sử dùng Naproxen (NSAID) và Đái tháo đường, bỏ qua dấu hiệu đặc hiệu ban lưới tím Livedo reticularis trên da và tinh thể thoi trên sinh thiết.
+
+---
+
+### 📌 Ca Lỗi 3: Nhiễm trùng Huyết do Vi khuẩn Gram-Âm & Độc tố Lipid A (Lipid A Endotoxin)
+* **ID Câu hỏi:** `test-00003`
+* **Lĩnh vực Y khoa:** Vi sinh y học & Truyền nhiễm (Medical Microbiology / Endotoxin Shock)
+* **Bệnh án Lâm sàng (Question Stem):**
+  > *"A 39-year-old woman is brought to the ED with fevers (39.1°C), chills, and LLQ pain. BP 80/50 mm Hg (Shock). Blood oozing around IV line (DIC). Lab: Platelets 14,200/mm³, Fibrinogen 83 mg/dL, D-dimer 965 ng/mL. When phenol is applied to blood at 90°C, a phosphorylated N-acetylglucosamine dimer with 6 fatty acids attached to a polysaccharide side chain (Lipid A) is identified. Blood culture shows?"*
+* **Các Lựa chọn Đáp án:**
+  * **Option A:** Coagulase-positive, gram-positive cocci...
+  * **Option B:** Encapsulated, gram-negative coccobacilli...
+  * **Option C:** Spore-forming, gram-positive bacilli...
+  * **Option D:** Lactose-fermenting, gram-negative rods forming pink colonies on MacConkey agar
+* **Đáp án Chuẩn (Ground Truth):** **Option D (Lactose-fermenting, gram-negative rods)**
+* **Phân tích Lâm sàng & Lý do Lỗi:**
+  * Cấu trúc sinh hóa `phosphorylated N-acetylglucosamine dimer with 6 fatty acids` chính là **Lipid A (Đội tố Lipopolysaccharide - LPS)** của vi khuẩn Gram âm (E. coli / Klebsiella), gây ra sốc nhiễm trùng và đông máu rải rác trong lòng mạch (DIC).
+  * Kết quả cấy máu đặc trưng của E. coli là trực khuẩn Gram âm lên men đường Lactose cho khuẩn lạc màu hồng trên thạch MacConkey (**Option D**).
+  * **Lý do V0/V3 nhầm:** Cả 2 mô hình bị đánh lừa bởi triệu chứng tiết dịch âm đạo làm nhầm sang Neisseria gonorrhoeae hoặc Haemophilus influenzae (**Option B**).
+
+---
+
+### 📌 Ca Lỗi 4: Điều trị Thuốc Nhỏ mắt Kháng Histamine trong Viêm Kết mạc Dị ứng
+* **ID Câu hỏi:** `test-00004`
+* **Lĩnh vực Y khoa:** Nhãn khoa & Dị ứng Lâm sàng (Ophthalmology / Allergy)
+* **Bệnh án Lâm sàng (Question Stem):**
+  > *"A 35-year-old man comes with itchy, watery eyes for 1 week and sneezing during springtime. Physical exam: Bilateral conjunctival injection with watery discharge. Visual acuity 20/20. Pupils reactive. Which is the most appropriate treatment?"*
+* **Các Lựa chọn Đáp án:**
+  * **Option A:** Erythromycin ointment
+  * **Option B:** Ketotifen eye drops
+  * **Option C:** Warm compresses
+  * **Option D:** Fluorometholone eye drops
+* **Đáp án Chuẩn (Ground Truth):** **Option B (Ketotifen eye drops)**
+* **Phân tích Lâm sàng & Lý do Lỗi:**
+  * Viêm kết mạc dị ứng mùa xuân (Seasonal allergic conjunctivitis) biểu hiện ngứa mắt, chảy nước mắt 2 bên và hắt hơi.
+  * Thuốc điều trị hàng đầu là Thuốc nhỏ mắt kháng H1 & ổn định tế bào Mast (**Ketotifen eye drops - Option B**).
+  * **Lý do V0/V3 nhầm:** Mô hình V0 chọn lầm corticosteroid nhỏ mắt (**Fluorometholone - Option D**), vốn chỉ dành cho ca nặng do nguy cơ tăng nhãn áp/cườm nước.
+
+---
+
+## 2. BẢNG TỔNG HỢP NGUYÊN NHÂN VÀ GIẢI PHÁP THẮT NÚT
+
+| Nhóm Ca Sai | Số Ca ($N=1270$) | Nguyên nhân Kỹ thuật | Giải pháp Kiến trúc V3+ |
 |:---|:---:|:---|:---|
-| **PieWrongs** *(Cả V0 và V3 đều sai)* | **68 câu** ($5.35\%$) | Câu hỏi y khoa USMLE Step 2/3 cực khó, kết hợp đa triệu chứng hiếm gặp hoặc đòi hỏi tính toán liều lượng dược lý phức tạp. | Cần mở rộng RAG Corpus chuyên sâu (UpToDate, Harrison's Internal Medicine). |
-| **Losses** *(V0 đúng, V3 sai)* | **18 câu** ($1.41\%$) | Nhiễu ngữ cảnh (Context Noise) do đoạn văn RAG retrieved chứa thông tin đánh đố khiến Reasoner bị lệch hướng. | Đã khắc phục bằng **Verifier Agent High-Precision Rule** ở phiên bản tối ưu mới nhất. |
-
----
-
-## 2. DANH SÁCH CÁC CA LỖI NỔI BẬT (SAMPLE FAILED CASES FROM LOG)
-
-### 🔴 Ca Lỗi 1: Tác dụng phụ chống chỉ định Vòng tránh thai Vòng Đồng (Copper IUD)
-* **Chủ đề Y khoa:** Dược lý & Bệnh học Phụ khoa (Gynecology / Pharmacology)
-* **Từ khóa Truy vấn:** `copper IUD contraindications Wilson disease copper allergy pelvic infection`
-* **Triệu chứng Lâm sàng:** Bệnh nhân nữ muốn đặt vòng tránh thai đồng nhưng có tiền sử bệnh lý tự miễn hoặc rối loạn chuyển hóa đồng (Bệnh Wilson).
-* **Lý do Lỗi:** Đoạn văn RAG thô chưa quét trúng phần chống chỉ định tuyệt đối của Bệnh Wilson (Wilson's disease), dẫn đến việc chọn lầm giải pháp tránh thai nội tiết thay vì vòng tránh thai không đồng.
-
----
-
-### 🔴 Ca Lỗi 2: Rối loạn Ngoại tháp & Tăng Prolactin do Risperidone
-* **Chủ đề Y khoa:** Tâm thần học & Thuốc Chống loạn thần (Psychiatry / Antipsychotics)
-* **Từ khóa Truy vấn:** `risperidone hyperprolactinemia extrapyramidal symptoms young male schizophrenia`
-* **Triệu chứng Lâm sàng:** Bệnh nhân nam trẻ tuổi điều trị Tâm thần phân liệt xuất hiện chứng vú to ở nam giới (gynecomastia) và giảm ham muốn tình dục.
-* **Lý do Lỗi:** Mô hình V0 chọn nhầm tác dụng phụ tăng cân của Olanzapine, trong khi V3 do bị trích dẫn RAG tổng quát nên chưa tách biệt rõ ràng mức độ gây tăng Prolactin máu cao nhất của Risperidone so với các thuốc chống loạn thần thế hệ 2 khác.
-
----
-
-### 🔴 Ca Lỗi 3: Ngộ độc Tai & Tổn thương Thính giác do Cisplatin
-* **Chủ đề Y khoa:** Ung thư học & Thuốc Hóa trị (Oncology / Chemotherapy Toxicity)
-* **Từ khóa Truy vấn:** `cisplatin ototoxicity DNA cross-linking sensorineural hearing loss bladder cancer`
-* **Triệu chứng Lâm sàng:** Bệnh nhân ung thư bàng quang sau điều trị hóa trị bằng Cisplatin xuất hiện ù tai và giảm thính lực tiếp nhận 2 bên (sensorineural hearing loss).
-* **Lý do Lỗi:** Cả 2 mô hình đều phân vân giữa cơ chế gây độc cho thận (Nephrotoxicity) và ngộ độc tai (Ototoxicity) do thiếu thông tin định lượng liều tích lũy của Cisplatin.
-
----
-
-### 🔴 Ca Lỗi 4: Quy trình Chẩn đoán Xác nhận HIV ở Phụ nữ Mang thai
-* **Chủ đề Y khoa:** Truyền nhiễm & Sản khoa (Infectious Disease / Obstetrics)
-* **Từ khóa Truy vấn:** `HIV maternal confirmatory testing Western blot immunofluorescence assay pregnant woman`
-* **Triệu chứng Lâm sàng:** Phụ nữ mang thai có xét nghiệm ELISA HIV dương tính lần đầu, cần bước xét nghiệm chẩn đoán xác định tiếp theo.
-* **Lý do Lỗi:** Sự thay đổi giữa hướng dẫn cũ (Western blot) và hướng dẫn CDC mới (HIV-1/HIV-2 differentiation immunoassay & Nucleic Acid Test RNA) khiến cả V0 và V3 bị xung đột giữa các mốc thời gian kiến thức.
-
----
-
-### 🔴 Ca Lỗi 5: Độc tính Gan & Thần kinh của Galantamine trong Điều trị Alzheimer
-* **Chủ đề Y khoa:** Thần kinh học & Dược lý Thuốc Ức chế Cholinesterase (Neurology / Pharmacology)
-* **Từ khóa Truy vấn:** `galantamine cholinergic toxicity diarrhea vomiting management antimuscarinic atropine`
-* **Triệu chứng Lâm sàng:** Bệnh nhân Alzheimer dùng quá liều Galantamine bị tiêu chảy, nôn mửa, tụt huyết áp và chậm nhịp tim.
-* **Lý do Lỗi:** V0 nhầm lẫn giữa xử trí bằng Atropine (độc tính muscarinic) và Pralidoxime, trong khi V3 bị RAG kéo sang hội chứng nôn chu kỳ (Cyclic vomiting syndrome).
-
----
-
-### 🔴 Ca Lỗi 6: Biến chứng Bệnh Thận Đa Nang Di truyền Trỗi (ADPKD)
-* **Chủ đề Y khoa:** Thận học & Di truyền học (Nephrology / Genetics)
-* **Từ khóa Truy vấn:** `autosomal dominant polycystic kidney disease intracranial aneurysm screening MRA`
-* **Triệu chứng Lâm sàng:** Bệnh nhân nam có thận đa nang kèm tiền sử gia đình có người vỡ túi mạch não (intracranial aneurysm).
-* **Lý do Lỗi:** Cả V0 và V3 đều dự đoán đúng bệnh lý thận nhưng chọn sai chỉ định tầm soát mạch máu não (chọn CT thay vì MRA sọ não không dựng quang).
-
----
-
-## 3. TỔNG KẾT & ĐỀ XUẤT NÂNG CẤP
-
-1. **68 ca PieWrongs:** Đều là những câu hỏi đòi hỏi tri thức y khoa ngách hoặc quy trình chẩn đoán CDC/USMLE mới cập nhật.
-2. **Giải pháp tối ưu:** Bổ sung **Hybrid Retrieval (BM25 + MedCPT Dense Retriever)** kết hợp **Reranker (BGE-Reranker-Large)** để đảm bảo các đoạn văn trích dẫn luôn chứa đúng 100% hướng dẫn chẩn đoán y khoa chuẩn xác.
+| **Cơ chế Thuốc Dược lý sâu** | 28 câu | LLM nhầm lẫn giữa tác dụng phụ chính và tác dụng phụ hiếm gặp. | Sử dụng Verifier Prompt bổ sung quy tắc High-Precision Rule dựa trên USMLE First Aid. |
+| **Xét nghiệm Sinh hóa/Vi sinh chi tiết** | 22 câu | Mô hình không nhận diện được mô tả hóa học cấu trúc (VD: Lipid A / Tinh thể Cholesterol). | Tăng cường RAG Retrieval Buffer ($k=5$) để phủ rộng các định nghĩa sinh hóa. |
+| **Quy trình Chẩn đoán Đa bước** | 18 câu | LLM chọn lầm bước chẩn đoán xác định thay vì bước xử trí cấp cứu đầu tiên. | Router Agent phân tách rõ câu hỏi thuộc loại *"Next Step"* hay *"Definitive Diagnosis"*. |

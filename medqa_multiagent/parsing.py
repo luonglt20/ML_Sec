@@ -64,6 +64,17 @@ def parse_final_answer(
     matches = [m.group(1).upper() for m in _FINAL_ANSWER_PATTERN.finditer(raw_text)]
 
     if len(matches) == 0:
+        # Fallback regex search for Option A, Choice A, Answer A, (A)
+        fallback_match = re.search(r"(?:Option|Choice|Answer|correct answer is|is)\s*:?\s*\(?\s*([A-D])\s*\)?", raw_text, re.IGNORECASE)
+        if fallback_match:
+            letter = fallback_match.group(1).upper()
+            if letter in valid_set:
+                return ParsedAnswer(
+                    is_valid=True,
+                    answer=letter,
+                    raw_text=raw_text,
+                    reason="extracted via fallback pattern",
+                )
         return ParsedAnswer(
             is_valid=False,
             answer=None,

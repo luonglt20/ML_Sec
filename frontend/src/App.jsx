@@ -244,10 +244,19 @@ export default function App() {
                 <button
                   onClick={runArena}
                   disabled={arenaLoading}
-                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-sky-500/25 transition disabled:opacity-50"
+                  className="flex items-center gap-2.5 px-6 py-3 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-sky-500/25 transition-all duration-200 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <Play className="w-5 h-5 fill-current" />
-                  {arenaLoading ? "Đang chạy Arena 5 Phiên bản..." : "🔥 CHẠY ARENA SO SÁNH 5 PHIÊN BẢN"}
+                  {arenaLoading ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 animate-spin text-sky-200" />
+                      <span>Đang chạy Arena 5 Phiên bản...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-5 h-5 fill-current" />
+                      <span>🔥 CHẠY ARENA SO SÁNH 5 PHIÊN BẢN</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -294,7 +303,7 @@ export default function App() {
                             ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
                             : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
                         }`}>
-                          <span className="font-extrabold text-base">Opt {res.answer}</span>
+                          <span className="font-extrabold text-base">Opt {res.answer || "?"}</span>
                           {isCorrect ? <CheckCircle2 className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
                         </div>
 

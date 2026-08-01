@@ -1,11 +1,8 @@
-"""MedQA-MultiAgent Clinical RAG & Decision Support System — Premium Web Interface.
+"""MedQA-MultiAgent Clinical Decision Support System — Next-Gen Web Interface.
 
-Features:
-1. ⚔️ Multi-Variant Arena (Compare V0, V1, V2, V3, V4 Side-by-Side on any question).
-2. 🎯 Custom Batch Tester (Manually select specific questions to test together).
-3. 🔬 Agent Pipeline Inspector (Visual step-by-step trace of Router, Retriever, Memory, Reasoner, Verifier).
-4. 📚 MedQA Dataset Browser (Search & test 1,270 official USMLE questions directly).
-5. 📊 Benchmark Analytics Dashboard (Table 1, Table 2, McNemar p-value, 95% CI, and Cost analysis).
+Fully Redesigned UI with Luxury Glassmorphism, Dynamic Color Schemes,
+Interactive Agent Workflow Visualizer, Multi-Variant Comparison Matrix,
+and Live USMLE Test Bench.
 
 Run with:
     .venv/bin/streamlit run medqa_multiagent/ui/app.py
@@ -39,97 +36,202 @@ load_env_file(str(PROJECT_ROOT / ".env"))
 
 # Page Setup
 st.set_page_config(
-    page_title="MedQA Multi-Agent Intelligence Hub",
+    page_title="MedQA Multi-Agent AI | Clinical Decision Support",
     page_icon="🩺",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ── PREMIUM GLASSMORPHIC STYLING ───────────────────────────────────────────────
+# ── NEXT-GEN LUXURY STYLING SYSTEM ─────────────────────────────────────────────
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
     
     html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     }
     
+    /* Background Canvas */
     .stApp {
-        background: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #090D16 100%);
-        color: #F8FAFC;
+        background: #0B0F17;
+        background-image: 
+            radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.08) 0px, transparent 50%),
+            radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.08) 0px, transparent 50%),
+            radial-gradient(at 50% 100%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
+        color: #F1F5F9;
+    }
+
+    /* Header Banner */
+    .app-header-box {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
+        padding: 2rem 2.2rem;
+        box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+        margin-bottom: 2rem;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .app-header-box::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0; height: 3px;
+        background: linear-gradient(90deg, #38BDF8, #818CF8, #34D399);
     }
     
     .hero-title {
-        font-size: 2.6rem;
+        font-size: 2.5rem;
         font-weight: 800;
-        background: linear-gradient(135deg, #38BDF8 0%, #818CF8 50%, #C084FC 100%);
+        letter-spacing: -0.03em;
+        background: linear-gradient(135deg, #FFFFFF 0%, #CBD5E1 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        margin-bottom: 0.2rem;
-        letter-spacing: -0.02em;
-    }
-    .hero-sub {
-        font-size: 1.1rem;
-        color: #94A3B8;
-        margin-bottom: 1.8rem;
-        font-weight: 400;
+        margin: 0;
     }
     
-    .glass-card {
-        background: rgba(30, 41, 59, 0.7);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        padding: 1.5rem;
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        margin-bottom: 1.2rem;
+    .hero-tagline {
+        font-size: 1.05rem;
+        color: #94A3B8;
+        margin-top: 0.4rem;
+        font-weight: 400;
+    }
+
+    /* KPI Cards */
+    .kpi-wrapper {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1.2rem;
+        margin-bottom: 1.5rem;
     }
     
     .kpi-card {
-        background: rgba(15, 23, 42, 0.8);
-        border: 1px solid rgba(56, 189, 248, 0.2);
-        border-radius: 14px;
-        padding: 1.2rem;
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 16px;
+        padding: 1.4rem 1.2rem;
         text-align: center;
-        transition: transform 0.2s ease, border-color 0.2s ease;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
+    
     .kpi-card:hover {
-        transform: translateY(-3px);
-        border-color: rgba(56, 189, 248, 0.6);
+        transform: translateY(-4px);
+        border-color: rgba(56, 189, 248, 0.4);
+        box-shadow: 0 12px 24px -10px rgba(56, 189, 248, 0.2);
     }
-    .kpi-value {
-        font-size: 2.1rem;
+    
+    .kpi-val {
+        font-size: 2.2rem;
         font-weight: 800;
-        background: linear-gradient(135deg, #38BDF8 0%, #34D399 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        letter-spacing: -0.02em;
+        line-height: 1.1;
     }
-    .kpi-label {
+    
+    .kpi-lbl {
+        font-size: 0.78rem;
+        color: #64748B;
+        text-transform: uppercase;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        margin-top: 0.4rem;
+    }
+
+    /* Variant Cards in Arena */
+    .variant-card {
+        background: rgba(30, 41, 59, 0.4);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 1.4rem;
+        transition: all 0.3s ease;
+        height: 100%;
+    }
+    
+    .variant-card-v3 {
+        border: 1px solid rgba(52, 211, 153, 0.4);
+        background: rgba(6, 78, 59, 0.15);
+        box-shadow: 0 0 20px rgba(52, 211, 153, 0.1);
+    }
+    
+    .v-title {
+        font-size: 1.1rem;
+        font-weight: 800;
+        margin-bottom: 0.8rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    
+    .v-badge-correct {
+        background: rgba(16, 185, 129, 0.2);
+        color: #34D399;
+        border: 1px solid rgba(52, 211, 153, 0.4);
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 0.9rem;
+    }
+    
+    .v-badge-wrong {
+        background: rgba(239, 68, 68, 0.2);
+        color: #F87171;
+        border: 1px solid rgba(248, 113, 113, 0.4);
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 0.9rem;
+    }
+    
+    .meta-pills {
+        display: flex;
+        gap: 0.6rem;
+        margin-top: 0.8rem;
         font-size: 0.8rem;
         color: #94A3B8;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        margin-top: 0.3rem;
     }
     
-    .badge-v0 { background: #334155; color: #F8FAFC; padding: 4px 10px; border-radius: 20px; font-weight: 600; font-size: 0.85rem; }
-    .badge-v1 { background: #1E3A8A; color: #93C5FD; padding: 4px 10px; border-radius: 20px; font-weight: 600; font-size: 0.85rem; }
-    .badge-v2 { background: #3730A3; color: #C7D2FE; padding: 4px 10px; border-radius: 20px; font-weight: 600; font-size: 0.85rem; }
-    .badge-v3 { background: #065F46; color: #6EE7B7; padding: 4px 10px; border-radius: 20px; font-weight: 600; font-size: 0.85rem; border: 1px solid #34D399; }
-    .badge-v4 { background: #701A75; color: #F5D0FE; padding: 4px 10px; border-radius: 20px; font-weight: 600; font-size: 0.85rem; }
-    
-    .agent-node {
-        background: rgba(15, 23, 42, 0.9);
-        border-left: 5px solid #38BDF8;
-        padding: 1rem 1.2rem;
-        border-radius: 0 12px 12px 0;
-        margin-bottom: 0.8rem;
+    .meta-pill {
+        background: rgba(15, 23, 42, 0.8);
+        padding: 4px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
     }
-    .agent-node-title {
+
+    /* Agent Flow Visual Nodes */
+    .flow-container {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .flow-step-card {
+        background: rgba(15, 23, 42, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-left: 4px solid #38BDF8;
+        border-radius: 12px;
+        padding: 1.2rem 1.5rem;
+    }
+
+    .flow-step-router { border-left-color: #38BDF8; }
+    .flow-step-rag { border-left-color: #818CF8; }
+    .flow-step-memory { border-left-color: #C084FC; }
+    .flow-step-reasoner { border-left-color: #FBBF24; }
+    .flow-step-verifier { border-left-color: #34D399; }
+
+    .step-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
         font-weight: 700;
         font-size: 1.05rem;
-        color: #38BDF8;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Custom Code & Json block styling */
+    pre, code {
+        font-family: 'JetBrains Mono', monospace !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -177,21 +279,19 @@ def load_medqa_dataset(file_name: str = "test.jsonl") -> List[Dict]:
     return data
 
 
-# ── SIDEBAR CONTROL PANEL ──────────────────────────────────────────────────────
-st.sidebar.markdown("## 🎛️ Architecture Control Panel")
-
-VARIANT_DESC = {
-    "V0": "V0: Direct LLM (Raw baseline without RAG)",
-    "V1": "V1: Naive RAG (Vector retrieval + LLM)",
-    "V2": "V2: 3-Agent Pipeline (Router + Reasoner + Verifier)",
-    "V3": "V3: Full 5-Agent System (Router + Researcher + Memory + Reasoner + Verifier) ⭐",
-    "V4": "V4: Ablation Model (Full pipeline w/o Verifier)",
-}
+# ── SIDEBAR CONTROLS ───────────────────────────────────────────────────────────
+st.sidebar.markdown("### 🎛️ Architecture Control")
 
 selected_variant = st.sidebar.selectbox(
-    "Primary Architecture Variant:",
+    "Default Test Variant:",
     ["V3", "V0", "V1", "V2", "V4"],
-    format_func=lambda x: VARIANT_DESC[x],
+    format_func=lambda v: {
+        "V0": "V0: Direct Baseline (No RAG)",
+        "V1": "V1: Naive RAG (Single Prompt)",
+        "V2": "V2: 3-Agent Pipeline",
+        "V3": "V3: Full 5-Agent System ⭐",
+        "V4": "V4: Pipeline w/o Verifier"
+    }[v],
     index=0
 )
 
@@ -199,44 +299,61 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("### 🔬 Hyperparameters")
 rag_top_k = st.sidebar.slider("RAG Top-K Passages:", 1, 5, 2)
 temperature = st.sidebar.slider("Temperature:", 0.0, 1.0, 0.0, 0.1)
-enable_backtracking = st.sidebar.checkbox("Enable RAG Backtracking Loops", value=True)
-enable_debate = st.sidebar.checkbox("Enable Multi-Agent Consensus Debate", value=True)
+enable_backtracking = st.sidebar.checkbox("RAG Backtracking Loops", value=True)
+enable_debate = st.sidebar.checkbox("Consensus Debate", value=True)
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("### ⚡ API Status & Keys")
+st.sidebar.markdown("### ⚡ Live Infrastructure")
 ds_key = os.environ.get("DEEPSEEK_API_KEY", "")
 if ds_key:
-    st.sidebar.success(f"DeepSeek Flash: `Active ({ds_key[:6]}...)`")
+    st.sidebar.success(f"DeepSeek V3 Flash: `Active ({ds_key[:6]}...)`")
 else:
-    st.sidebar.warning("DeepSeek Flash: `Fallback Mode`")
-st.sidebar.info("Groq Failover: `6 Keys Loaded`")
-st.sidebar.info("Gemini Failover: `2 Keys Loaded`")
+    st.sidebar.info("DeepSeek Flash: `Failover Cascade`")
+st.sidebar.caption("Groq Backup: `6 Rotating Keys Active`")
+st.sidebar.caption("Gemini Backup: `2 Rotating Keys Active`")
 
 
-# ── HERO HEADER ────────────────────────────────────────────────────────────────
-st.markdown('<div class="hero-title">🩺 MedQA Multi-Agent Intelligence Hub</div>', unsafe_allow_html=True)
-st.markdown('<div class="hero-sub">Hệ thống Trợ lý Y khoa Lâm sàng Da-Agent & RAG Truy xuất Tri thức Sách giáo khoa USMLE</div>', unsafe_allow_html=True)
+# ── HEADER BANNER ──────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="app-header-box">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h1 class="hero-title">MedQA Multi-Agent Intelligence Platform</h1>
+            <div class="hero-tagline">Hệ thống Trợ lý Y khoa Lâm sàng Đa Agent & Truy xuất Tri thức USMLE</div>
+        </div>
+        <div style="display: flex; gap: 0.6rem;">
+            <span style="background: rgba(56, 189, 248, 0.15); color: #38BDF8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: 0.85rem;">
+                N = 1,270 USMLE Cases
+            </span>
+            <span style="background: rgba(52, 211, 153, 0.15); color: #34D399; border: 1px solid rgba(52, 211, 153, 0.3); padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: 0.85rem;">
+                V3 Acc: 93.23%
+            </span>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-# Main Navigation Tabs
-tab_arena, tab_custom_batch, tab_inspector, tab_dataset, tab_analytics = st.tabs([
-    "⚔️ Variant Arena (So sánh Tất cả Ver)",
-    "🎯 Custom Batch Tester (Tự chọn nhiều câu)",
-    "🔬 Agent Inspector (Vết dấu 5 Agent)",
-    "📚 Dataset Explorer (1,270 Câu MedQA)",
-    "📊 Benchmark Analytics (Báo cáo Thống kê)"
+
+# Main Tabs
+tab_arena, tab_batch, tab_flow, tab_explorer, tab_reports = st.tabs([
+    "⚔️ Variant Arena (So sánh Các Ver)",
+    "🎯 Custom Batch Tester (Tự chọn câu)",
+    "🔬 Agent Pipeline Flow (Sơ đồ 5 Agent)",
+    "📚 Dataset Library (Duyệt 1,270 Câu)",
+    "📊 Benchmark Analytics (Báo cáo)"
 ])
 
 
 # ── TAB 1: MULTI-VARIANT ARENA ─────────────────────────────────────────────────
 with tab_arena:
-    st.subheader("⚔️ Multi-Variant Arena: So sánh Trực tiếp tất cả 5 Phiên bản (V0 ➔ V4)")
-    st.caption("Cho phép bạn test 1 câu hỏi y khoa bất kỳ và quan sát đồng thời kết quả, độ trễ, lượng token và lập luận của cả 5 phiên bản!")
+    st.subheader("⚔️ Multi-Variant Arena: So sánh Trực tiếp Tất cả Phiên bản (V0 ➔ V4)")
+    st.caption("Thực thi đồng thời và quan sát sự chênh lệch đáp án, lập luận, độ trễ và token giữa 5 phiên bản kiến trúc.")
 
     questions = load_medqa_dataset("test.jsonl")
 
-    col_q1, col_q2 = st.columns([1.5, 2])
-    with col_q1:
-        if st.button("🎲 Nạp Ngẫu nhiên 1 Câu MedQA Test Set", key="arena_random"):
+    col_ar1, col_ar2 = st.columns([1.8, 2])
+    with col_ar1:
+        if st.button("🎲 Nạp Ngẫu nhiên 1 Ca Lâm Sàng từ Dataset", type="secondary"):
             sample = random.choice(questions)
             st.session_state["arena_q_id"] = sample.get("question_id", "test-sample")
             st.session_state["arena_stem"] = sample["question"]
@@ -246,12 +363,12 @@ with tab_arena:
             st.session_state["arena_opt_D"] = sample["options"]["D"]
             st.session_state["arena_expected"] = sample["answer"]
 
-    with col_q2:
-        st.markdown(f"**ID Câu hỏi:** `{st.session_state.get('arena_q_id', 'test-00000')}` | **Ground Truth:** Option **`{st.session_state.get('arena_expected', 'A')}`**")
+    with col_ar2:
+        st.markdown(f"**ID Ca bệnh:** `{st.session_state.get('arena_q_id', 'test-00001')}` &nbsp;|&nbsp; **Ground Truth Answer:** Option <span style='color:#34D399; font-weight:800; font-size:1.1rem;'>{st.session_state.get('arena_expected', 'A')}</span>", unsafe_allow_html=True)
 
-    # Inputs
+    # Input Case
     q_stem = st.text_area(
-        "Nội dung Ca lâm sàng (Question Stem):",
+        "Nội dung Bệnh án / Ca lâm sàng (Case Vignette):",
         value=st.session_state.get(
             "arena_stem",
             "A 24-year-old male presents with severe knee pain and urethral discharge. Microscopic analysis reveals Gram-negative intracellular diplococci. Which mechanism of action corresponds to the first-line treatment?"
@@ -261,17 +378,17 @@ with tab_arena:
 
     cA, cB = st.columns(2)
     with cA:
-        opt_A = st.text_input("Option A:", value=st.session_state.get("arena_opt_A", "Inhibition of bacterial cell wall peptidoglycan synthesis"))
-        opt_B = st.text_input("Option B:", value=st.session_state.get("arena_opt_B", "Inhibition of 30S ribosomal subunit"))
+        opt_A = st.text_input("Lựa chọn A:", value=st.session_state.get("arena_opt_A", "Inhibition of bacterial cell wall peptidoglycan synthesis"))
+        opt_B = st.text_input("Lựa chọn B:", value=st.session_state.get("arena_opt_B", "Inhibition of 30S ribosomal subunit"))
     with cB:
-        opt_C = st.text_input("Option C:", value=st.session_state.get("arena_opt_C", "Inhibition of DNA gyrase"))
-        opt_D = st.text_input("Option D:", value=st.session_state.get("arena_opt_D", "Inhibition of dihydrofolate reductase"))
+        opt_C = st.text_input("Lựa chọn C:", value=st.session_state.get("arena_opt_C", "Inhibition of DNA gyrase"))
+        opt_D = st.text_input("Lựa chọn D:", value=st.session_state.get("arena_opt_D", "Inhibition of dihydrofolate reductase"))
 
     options_dict = {"A": opt_A, "B": opt_B, "C": opt_C, "D": opt_D}
     expected_ans = st.session_state.get("arena_expected", "A")
 
     st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("🔥 CHẠY ARENA SO SÁNH 5 PHIÊN BẢN (V0, V1, V2, V3, V4)", type="primary", use_container_width=True):
+    if st.button("🔥 CHẠY ARENA SO SÁNH TẤT CẢ 5 PHIÊN BẢN (V0, V1, V2, V3, V4)", type="primary", use_container_width=True):
         config = RunConfig(
             model="unified",
             temperature=temperature,
@@ -292,49 +409,51 @@ with tab_arena:
         progress_text = st.empty()
         cols_arena = st.columns(5)
         variants_list = ["V0", "V1", "V2", "V3", "V4"]
-        badge_classes = ["badge-v0", "badge-v1", "badge-v2", "badge-v3", "badge-v4"]
+        v_titles = ["V0 Baseline", "V1 Naive RAG", "V2 3-Agent", "V3 Full 5-Agent ⭐", "V4 w/o Verifier"]
 
-        for idx, (v, col, badge_cls) in enumerate(zip(variants_list, cols_arena, badge_classes)):
-            progress_text.info(f"⏳ Đang thực thi Variant {v} ({idx+1}/5)...")
+        for idx, (v, title, col) in enumerate(zip(variants_list, v_titles, cols_arena)):
+            progress_text.info(f"⏳ Đang thực thi {title} ({idx+1}/5)...")
             t0 = time.monotonic()
             try:
                 res = answer_question(q_stem, options_dict, v, config, llm_client, retriever)
                 elapsed = time.monotonic() - t0
-
                 is_corr = (res.answer and res.answer.upper() == expected_ans.upper())
 
                 with col:
-                    st.markdown(f'<div class="{badge_cls}">VARIANT {v}</div>', unsafe_allow_html=True)
+                    v_card_cls = "variant-card variant-card-v3" if v == "V3" else "variant-card"
+                    badge_markup = f'<span class="v-badge-correct">✅ {res.answer} (ĐÚNG)</span>' if is_corr else f'<span class="v-badge-wrong">❌ {res.answer} (SAI)</span>'
+
+                    st.markdown(f"""
+                    <div class="{v_card_cls}">
+                        <div class="v-title">
+                            <span>{title}</span>
+                            {badge_markup}
+                        </div>
+                        <div class="meta-pills">
+                            <span class="meta-pill">⏱️ {elapsed:.2f}s</span>
+                            <span class="meta-pill">🪙 {res.total_tokens} tok</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
                     st.markdown("<br>", unsafe_allow_html=True)
 
-                    if is_corr:
-                        st.success(f"✅ Predict: **{res.answer}**")
-                    else:
-                        st.error(f"❌ Predict: **{res.answer}** (Ans: {expected_ans})")
-
-                    st.metric("Latency", f"{elapsed:.2f}s")
-                    st.metric("Tokens", f"{res.total_tokens}")
-
-                    with st.expander("💬 Reason Details"):
-                        st.caption(res.explanation)
+                    with st.expander("💬 Lập luận Lâm sàng Details"):
+                        st.write(res.explanation)
             except Exception as exc:
                 elapsed = time.monotonic() - t0
                 with col:
-                    st.markdown(f'<div class="{badge_cls}">VARIANT {v}</div>', unsafe_allow_html=True)
-                    st.warning(f"⚠️ API Limit/Retry: {exc}")
-                    st.caption("Hãy thử bấm lại nút Chạy Arena sau 2 giây.")
+                    st.warning(f"⚠️ {title}: {exc}")
 
-        progress_text.success("🎉 Hoàn tất so sánh Arena cả 5 phiên bản!")
+        progress_text.success("🎉 Hoàn tất so sánh Arena cả 5 phiên bản kiến trúc!")
 
 
-# ── TAB 2: CUSTOM BATCH TESTER (TỰ CHỌN NHIỀU CÂU HỎI MONG MUỐN) ───────────────
-with tab_custom_batch:
+# ── TAB 2: CUSTOM BATCH TESTER ────────────────────────────────────────────────
+with tab_batch:
     st.subheader("🎯 Custom Batch Tester: Tự chọn Danh sách Các Câu hỏi Cần Test")
-    st.caption("Cho phép bạn chủ động tích chọn chính xác danh sách các câu hỏi MedQA USMLE mong muốn và chọn các phiên bản Cần so sánh!")
+    st.caption("Tùy chọn chính xác danh sách các câu hỏi MedQA USMLE và chọn các phiên bản bạn muốn so sánh!")
 
     all_dataset = load_medqa_dataset("test.jsonl")
 
-    # Format choices for multiselect
     q_options_map = {}
     q_labels = []
     for idx, item in enumerate(all_dataset, start=1):
@@ -344,15 +463,15 @@ with tab_custom_batch:
         q_labels.append(label)
         q_options_map[label] = item
 
-    col_b1, col_b2 = st.columns([3, 1])
-    with col_b1:
+    cb_col1, cb_col2 = st.columns([3, 1])
+    with cb_col1:
         selected_labels = st.multiselect(
-            "📋 Chọn danh sách các câu hỏi bạn muốn test:",
+            "📋 Tích chọn danh sách các câu hỏi bạn muốn test:",
             options=q_labels,
-            default=q_labels[:3],
+            default=q_labels[:4],
             help="Tìm kiếm từ khóa hoặc ID câu hỏi để chọn nhiều câu cùng lúc"
         )
-    with col_b2:
+    with cb_col2:
         selected_variants = st.multiselect(
             "⚙️ Chọn các Phiên bản chạy:",
             options=["V0", "V1", "V2", "V3", "V4"],
@@ -363,10 +482,8 @@ with tab_custom_batch:
     st.markdown(f"Đã chọn **{len(selected_labels)}** câu hỏi & **{len(selected_variants)}** phiên bản kiến trúc.")
 
     if st.button("🚀 BẮT ĐẦU CHẠY BATCH TEST CÁC CÂU ĐÃ CHỌN", type="primary", use_container_width=True):
-        if not selected_labels:
-            st.warning("Vui lòng chọn ít nhất 1 câu hỏi từ danh sách!")
-        elif not selected_variants:
-            st.warning("Vui lòng chọn ít nhất 1 phiên bản kiến trúc!")
+        if not selected_labels or not selected_variants:
+            st.warning("Vui lòng chọn ít nhất 1 câu hỏi và 1 phiên bản kiến trúc!")
         else:
             config = RunConfig(
                 model="unified",
@@ -404,7 +521,7 @@ with tab_custom_batch:
                 row = {
                     "Question ID": q_id,
                     "Expected": expected,
-                    "Snippet": stem[:65] + "..."
+                    "Snippet": stem[:60] + "..."
                 }
 
                 for v in selected_variants:
@@ -436,8 +553,7 @@ with tab_custom_batch:
 
             status_text.success("🎉 Đã hoàn tất Batch Test cho toàn bộ các câu được chọn!")
 
-            # Metric Summary Cards per Variant
-            st.markdown("### 🏆 Báo cáo Tổng quan Từng Phiên bản trên Tập đã Chọn:")
+            st.markdown("### 🏆 Báo cáo Kết quả Từng Phiên bản:")
             score_cols = st.columns(len(selected_variants))
             for v_idx, (v, col) in enumerate(zip(selected_variants, score_cols)):
                 sc = variant_scores[v]
@@ -445,20 +561,19 @@ with tab_custom_batch:
                 acc = (sc["correct"] / tot) * 100.0
                 avg_t = sc["time"] / tot
                 with col:
-                    st.metric(f"Accuracy {v}", f"{acc:.1f}%", f"{sc['correct']}/{sc['total']} đúng")
-                    st.caption(f"Avg Time: `{avg_t:.2f}s` | Tokens: `{sc['tokens']}`")
+                    st.metric(f"Accuracy {v}", f"{acc:.1f}%", f"{sc['correct']}/{sc['total']} câu đúng")
+                    st.caption(f"Avg Latency: `{avg_t:.2f}s` | Tokens: `{sc['tokens']}`")
 
-            # Table of detailed question comparisons
-            st.markdown("### 📋 Bảng So Sánh Chi Tiết Từng Câu Hỏi:")
+            st.markdown("### 📋 Bảng So Sánh Chi Tiết:")
             st.dataframe(batch_results, use_container_width=True)
 
 
-# ── TAB 3: AGENT PIPELINE INSPECTOR ───────────────────────────────────────────
-with tab_inspector:
-    st.subheader("🔬 Agent Pipeline Inspector: Phân tích Chi tiết Vết Dấu 5 Agent (V3)")
-    st.caption("Quan sát trực tiếp dữ liệu luồng công việc của Router Agent, RAG Retriever, Memory Agent, Reasoner Agent, và Verifier Agent!")
+# ── TAB 3: AGENT PIPELINE FLOW ─────────────────────────────────────────────────
+with tab_flow:
+    st.subheader("🔬 Agent Pipeline Flow: Sơ đồ Luồng Thực thi 5 Agent (V3)")
+    st.caption("Truy vết chi tiết từng bước trao đổi thông tin giữa Router, Retriever, Memory, Reasoner và Verifier Agent!")
 
-    if st.button("🚀 Thực thi & Phân tích Vết dấu Luồng 5 Agent (V3)", type="primary"):
+    if st.button("🚀 Kích hoạt Phân tích Sơ đồ Luồng 5 Agent V3", type="primary"):
         stem = st.session_state.get("arena_stem", "A 24-year-old male presents with severe knee pain and urethral discharge. Microscopic analysis reveals Gram-negative intracellular diplococci. Which mechanism of action corresponds to the first-line treatment?")
         opts = {
             "A": st.session_state.get("arena_opt_A", "Inhibition of bacterial cell wall peptidoglycan synthesis"),
@@ -487,57 +602,63 @@ with tab_inspector:
         with st.spinner("Đang chạy luồng 5 Agent V3..."):
             res = answer_question(stem, opts, "V3", config, llm_client, retriever)
 
-        st.markdown("### 🏆 Kết luận Cuối cùng của Hệ thống:")
-        res_c1, res_c2 = st.columns(2)
-        with res_c1:
+        st.markdown("### 🏆 Kết luận của Verifier Agent:")
+        f1, f2 = st.columns(2)
+        with f1:
             st.success(f"**Dự đoán:** Option `{res.answer}`")
-        with res_c2:
+        with f2:
             st.info(f"**Chỉ số:** `{res.total_tokens} tokens` | Latency: `{res.latency_seconds:.2f}s`")
 
         st.write(res.explanation)
 
         if res.agent_trace:
             st.markdown("---")
-            st.markdown("### 🤖 Cây luồng làm việc của các Agent (Agent Workflow Trace):")
+            st.markdown("### 🤖 Các bước Thực thi Chi tiết trong Pipeline:")
+
+            step_classes = ["flow-step-router", "flow-step-rag", "flow-step-memory", "flow-step-reasoner", "flow-step-verifier"]
 
             for idx, trace in enumerate(res.agent_trace, start=1):
                 agent_name = trace.get("agent_name", f"Agent {idx}")
                 action = trace.get("action", "")
                 details = trace.get("details", {})
+                cls_name = step_classes[(idx - 1) % len(step_classes)]
 
                 st.markdown(f"""
-                <div class="agent-node">
-                    <div class="agent-node-title">Step {idx}: {agent_name} [{action}]</div>
+                <div class="flow-step-card {cls_name}">
+                    <div class="step-header">
+                        <span>🤖 Step {idx}: {agent_name}</span>
+                        <span style="font-size:0.85rem; color:#94A3B8;">[{action}]</span>
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
                 st.json(details)
 
 
-# ── TAB 4: DATASET EXPLORER (1270 TEST QUESTIONS) ──────────────────────────────
-with tab_dataset:
-    st.subheader("📚 MedQA Dataset Explorer (1,270 Câu hỏi USMLE)")
-    st.caption("Duyệt tìm, tìm kiếm từ khóa và chạy test trực tiếp bất kỳ câu nào trong bộ dữ liệu MedQA Test!")
+# ── TAB 4: DATASET LIBRARY ────────────────────────────────────────────────────
+with tab_explorer:
+    st.subheader("📚 MedQA Dataset Library (1,270 Câu hỏi USMLE Test Split)")
+    st.caption("Duyệt tìm bộ câu hỏi lâm sàng chuẩn y khoa và nạp nhanh vào Arena để thử nghiệm.")
 
     dataset_cases = load_medqa_dataset("test.jsonl")
 
-    search_term = st.text_input("🔍 Tìm kiếm từ khóa bệnh/thuốc (VD: gonorrhoeae, anemia, heart failure):", "")
+    search_term = st.text_input("🔍 Tìm kiếm từ khóa lâm sàng (VD: gonorrhoeae, anemia, heat stroke):", "")
     filtered_cases = [c for c in dataset_cases if search_term.lower() in c['question'].lower()] if search_term else dataset_cases
 
-    st.markdown(f"Tìm thấy **{len(filtered_cases)} / {len(dataset_cases)}** câu hỏi phù hợp.")
+    st.markdown(f"Hiển thị **{len(filtered_cases)} / {len(dataset_cases)}** câu hỏi phù hợp.")
 
     page = st.number_input("Trang (Page):", min_value=1, max_value=max(1, len(filtered_cases)//10 + 1), value=1)
     start_idx = (page - 1) * 10
     end_idx = min(start_idx + 10, len(filtered_cases))
 
     for idx, c in enumerate(filtered_cases[start_idx:end_idx], start=start_idx+1):
-        with st.expander(f"[{idx}] ID: {c.get('question_id', 'test')} - {c['question'][:90]}..."):
-            st.markdown(f"**Nội dung đầy đủ:**\n{c['question']}")
-            st.markdown(f"**Các lựa chọn:**")
+        with st.expander(f"[{idx}] ID: {c.get('question_id', 'test')} - {c['question'][:85]}..."):
+            st.markdown(f"**Bệnh án đầy đủ:**\n{c['question']}")
+            st.markdown(f"**Lựa chọn:**")
             for letter, opt_text in c['options'].items():
                 st.write(f"- **{letter}.** {opt_text}")
-            st.success(f"Ground Truth Answer: Option **{c['answer']}**")
+            st.success(f"Đáp án chuẩn (Ground Truth): Option **{c['answer']}**")
 
-            if st.button(f"🚀 Nạp câu này vào Arena", key=f"btn_load_{idx}"):
+            if st.button(f"🚀 Nạp câu này vào Multi-Variant Arena", key=f"btn_load_{idx}"):
                 st.session_state["arena_q_id"] = c.get("question_id", "test-sample")
                 st.session_state["arena_stem"] = c["question"]
                 st.session_state["arena_opt_A"] = c["options"]["A"]
@@ -545,25 +666,35 @@ with tab_dataset:
                 st.session_state["arena_opt_C"] = c["options"]["C"]
                 st.session_state["arena_opt_D"] = c["options"]["D"]
                 st.session_state["arena_expected"] = c["answer"]
-                st.toast("Đã nạp câu hỏi thành công! Hãy chuyển sang Tab Arena để test.")
+                st.toast("Đã nạp thành công! Chuyển sang Tab Arena để chạy so sánh.")
 
 
-# ── TAB 5: BENCHMARK ANALYTICS ──────────────────────────────────────────────────
-with tab_analytics:
+# ── TAB 5: BENCHMARK ANALYTICS ────────────────────────────────────────────────
+with tab_reports:
     st.subheader("📊 Statistical Benchmark Reports (N = 1,270 Real API Calls)")
     st.caption("Báo cáo số liệu đo đạc thực tế nguyên bản 100% qua API DeepSeek Flash.")
 
-    k1, k2, k3, k4 = st.columns(4)
-    with k1:
-        st.markdown('<div class="kpi-card"><div class="kpi-value">93.23%</div><div class="kpi-label">V3 Full System Accuracy</div></div>', unsafe_allow_html=True)
-    with k2:
-        st.markdown('<div class="kpi-card"><div class="kpi-value" style="color:#34D399;">+3.46%</div><div class="kpi-label">Gain Over Baseline</div></div>', unsafe_allow_html=True)
-    with k3:
-        st.markdown('<div class="kpi-card"><div class="kpi-value" style="color:#C084FC;">p < 0.001</div><div class="kpi-label">McNemar Significance</div></div>', unsafe_allow_html=True)
-    with k4:
-        st.markdown('<div class="kpi-card"><div class="kpi-value" style="color:#FBBF24;">4.12s</div><div class="kpi-label">Avg Latency / Q</div></div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="kpi-wrapper">
+        <div class="kpi-card">
+            <div class="kpi-val" style="color: #34D399;">93.23%</div>
+            <div class="kpi-lbl">V3 Accuracy (1,184/1,270)</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-val" style="color: #38BDF8;">+3.46%</div>
+            <div class="kpi-lbl">Net Gain Over V0</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-val" style="color: #C084FC;">p &lt; 0.001</div>
+            <div class="kpi-lbl">McNemar Test Significance</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-val" style="color: #FBBF24;">68 Ca</div>
+            <div class="kpi-lbl">PieWrongs (Both Failed)</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
     t1_col, t2_col = st.columns([1.1, 1])
 
     with t1_col:

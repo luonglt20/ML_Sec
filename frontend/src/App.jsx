@@ -264,7 +264,7 @@ export default function App() {
             ].map((vInfo) => {
               const res = arenaResults[vInfo.id];
               const isV3 = vInfo.id === 'V3';
-              const isCorrect = res && res.answer && res.answer.upper() === expectedAns.upper();
+              const isCorrect = res && res.answer && res.answer.toUpperCase() === expectedAns.toUpperCase();
 
               return (
                 <div

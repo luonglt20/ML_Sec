@@ -46,7 +46,8 @@ class UnifiedLLMClient(LLMClient):
                 "AQ-REDACTED",
             ]
 
-        self._deepseek_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+        ds_keys = self._load_keys("DEEPSEEK_API_KEY", count=1)
+        self._deepseek_key = ds_keys[0] if ds_keys else "sk-REDACTED"
 
         # Key Index Pointers
         self._groq_idx = 0
@@ -89,39 +90,46 @@ class UnifiedLLMClient(LLMClient):
     ) -> LLMResponse:
         tier = self._determine_tier(role)
 
-        # ── Cascade Provider 1: Groq API (Rotation through 6 keys) ────────────
-        if self._groq_keys:
-            groq_model = "llama-3.1-8b-instant" if tier == "light" else "llama-3.3-70b-versatile"
-            for _ in range(len(self._groq_keys)):
-                key = self._groq_keys[self._groq_idx]
-                self._groq_idx = (self._groq_idx + 1) % len(self._groq_keys)
+        for attempt in range(4):  # Up to 4 global retry attempts with backoff
+            # ── Cascade Provider 1: DeepSeek API (Flash model: deepseek-chat) ──────
+            ds_key = os.environ.get("DEEPSEEK_API_KEY", "").strip() or self._deepseek_key
+            if ds_key:
                 try:
-                    return self._call_groq(key, groq_model, role, prompt, temperature, retrieved_context_id)
+                    return self._call_deepseek(ds_key, "deepseek-chat", role, prompt, temperature, retrieved_context_id)
                 except Exception as exc:
-                    print(f"[UnifiedLLM] Groq Key failed: {exc}. Trying next key/provider...", flush=True)
-                    continue
+                    if "402" in str(exc) or "Payment Required" in str(exc):
+                        pass # Out of balance, fallback to Groq/Gemini
+                    else:
+                        print(f"[UnifiedLLM] DeepSeek Flash (attempt {attempt+1}): {exc}. Retrying...", flush=True)
 
-        # ── Cascade Provider 2: Gemini API (Rotation through 2 keys) ──────────
-        if self._gemini_keys:
-            gemini_model = "gemini-2.0-flash-lite" if tier == "light" else "gemini-2.5-flash"
-            for _ in range(len(self._gemini_keys)):
-                key = self._gemini_keys[self._gemini_idx]
-                self._gemini_idx = (self._gemini_idx + 1) % len(self._gemini_keys)
-                try:
-                    return self._call_gemini(key, gemini_model, role, prompt, temperature, retrieved_context_id)
-                except Exception as exc:
-                    print(f"[UnifiedLLM] Gemini Key failed: {exc}. Trying next key/provider...", flush=True)
-                    continue
+            # ── Cascade Provider 2: Groq API (Rotation through keys with backoff) ──
+            if self._groq_keys:
+                groq_model = "llama-3.1-8b-instant" if tier == "light" else "llama-3.3-70b-versatile"
+                for _ in range(len(self._groq_keys)):
+                    key = self._groq_keys[self._groq_idx]
+                    self._groq_idx = (self._groq_idx + 1) % len(self._groq_keys)
+                    try:
+                        return self._call_groq(key, groq_model, role, prompt, temperature, retrieved_context_id)
+                    except Exception as exc:
+                        time.sleep(0.5 * (attempt + 1))
+                        continue
 
-        # ── Cascade Provider 3: DeepSeek API (Backup Provider) ────────────────
-        if self._deepseek_key:
-            ds_model = "deepseek-chat" if tier == "light" else "deepseek-reasoner"
-            try:
-                return self._call_deepseek(self._deepseek_key, ds_model, role, prompt, temperature, retrieved_context_id)
-            except Exception as exc:
-                print(f"[UnifiedLLM] DeepSeek failed: {exc}.", flush=True)
+            # ── Cascade Provider 3: Gemini API (Rotation through keys with backoff) ──
+            if self._gemini_keys:
+                gemini_model = "gemini-2.0-flash-lite" if tier == "light" else "gemini-2.5-flash"
+                for _ in range(len(self._gemini_keys)):
+                    key = self._gemini_keys[self._gemini_idx]
+                    self._gemini_idx = (self._gemini_idx + 1) % len(self._gemini_keys)
+                    try:
+                        return self._call_gemini(key, gemini_model, role, prompt, temperature, retrieved_context_id)
+                    except Exception as exc:
+                        time.sleep(0.5 * (attempt + 1))
+                        continue
 
-        raise RuntimeError("All LLM Providers (Groq, Gemini, DeepSeek) exhausted or rate limited.")
+            # Backoff delay before next global attempt
+            time.sleep(1.0 * (attempt + 1))
+
+        raise RuntimeError("All LLM Providers (DeepSeek, Groq, Gemini) exhausted or rate limited after retries.")
 
     def _call_groq(
         self, key: str, model_name: str, role: str, prompt: str, temperature: float, context_id: Optional[str]

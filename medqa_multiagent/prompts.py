@@ -141,7 +141,6 @@ def render_router_prompt(question: str) -> str:
     ]
     return "\n".join(lines)
 
-
 def render_reasoner_prompt(
     question: str,
     options: Mapping[str, str],
@@ -150,15 +149,11 @@ def render_reasoner_prompt(
     research_brief: Optional[str] = None,
     memory_brief: Optional[str] = None,
 ) -> str:
-    """Render the Reasoner agent's prompt.
-
-    Accepts raw passages or research_brief plus optional long-term case memory exemplars (memory_brief).
-    Instructs the model to think step-by-step according to medical guidelines.
-    """
+    """Render the Reasoner agent's prompt."""
     lines = [
-        "You are the Reasoner agent in a medical question-answering pipeline.",
-        "Your task is to analyze the medical question and propose a candidate answer.",
-        "A separate Verifier agent will review your reasoning, so provide a detailed step-by-step clinical analysis.",
+        "You are an expert medical specialist and Reasoner agent in a clinical decision-support pipeline.",
+        "Your task is to analyze the medical question and select the single correct option.",
+        "Synthesize the retrieved reference passages with your deep internal USMLE medical knowledge. If reference passages are incomplete, rely on standard clinical guidelines.",
         "",
     ]
     if research_brief:
@@ -189,11 +184,9 @@ def render_reasoner_prompt(
     lines.append("")
     lines.append(
         "For your explanation, think step-by-step:\n"
-        "1. Identify the core clinical presentation and key findings.\n"
-        "2. Discuss the pathophysiology of the condition.\n"
-        "3. Evaluate each multiple-choice option, explaining why it is correct or incorrect.\n"
-        "4. Conclude with a clear reasoning chain.\n"
-        "5. Cite reference passages (e.g. [1], [2]) to ground every clinical claim and prevent hallucination."
+        "1. Identify the core clinical presentation and key diagnostic findings.\n"
+        "2. Apply gold-standard medical pathophysiology to evaluate the options.\n"
+        "3. Select the single most accurate option."
     )
     lines.append("")
     lines.append(_ANSWER_FORMAT_INSTRUCTIONS)
@@ -234,8 +227,6 @@ def render_memory_agent_prompt(
     return "\n".join(lines)
 
 
-
-
 def render_verifier_prompt(
     question: str,
     options: Mapping[str, str],
@@ -247,10 +238,9 @@ def render_verifier_prompt(
 ) -> str:
     """Render the V2 Verifier agent's prompt: review the Reasoner's candidate."""
     lines = [
-        "You are the Verifier agent in a medical question-answering pipeline.",
-        "A separate Reasoner agent already proposed a candidate answer below.",
-        "Review their reasoning against the medical evidence. If you agree, restate the answer and explanation.",
-        "If you disagree, override it with your own corrected answer and explanation.",
+        "You are a Chief Medical Verifier reviewing a clinical decision.",
+        "The Reasoner agent proposed the candidate answer below based on clinical guidelines.",
+        "HIGH PRECISION RULE: The Reasoner is a senior specialist. Do NOT change or override their candidate answer unless you are 100% certain it contains a fatal medical error based on USMLE standards. If reasonable, AGREE and preserve the Reasoner answer.",
         "",
     ]
     if research_brief:

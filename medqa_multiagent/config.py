@@ -68,12 +68,12 @@ class RunConfig:
 
     model: str
     temperature: float
-    dev_sample_size: int
-    official_test_sample_size: int
-    seed: int
-    rag_top_k: int
-    rag_chunk_size: int
-    memory_top_k: int
+    dev_sample_size: int = 10
+    official_test_sample_size: int = 10
+    seed: int = 42
+    rag_top_k: int = 2
+    rag_chunk_size: int = 128
+    memory_top_k: int = 1
     rag_index_dir: str = "data/rag_index"
     rag_chunk_overlap: int = 32
     rag_child_chunk_size: int = 64

@@ -71,7 +71,7 @@ GEMINI_API_KEY=
 GEMINI_API_KEY_2=
 
 # Groq API Keys (7 Rotating Keys)
-GROQ_API_KEY_1=
+GROQ_API_KEY_1= # gitleaks:allow -- documented empty placeholder
 GROQ_API_KEY_2=
 
 # DeepSeek API Key (Backup Provider)

@@ -54,7 +54,7 @@ graph TD
 
 ## 3. ĐỘNG CƠ UNIFIED MULTI-PROVIDER FAILOVER ENGINE
 
-Nằm tại [medqa_multiagent/unified_llm_client.py](file:///Users/toilaluongg/Desktop/UIT%20-SDH/ML-Sec/GK/medqa_multiagent/unified_llm_client.py):
+Nằm tại [`medqa_multiagent/unified_llm_client.py`](../medqa_multiagent/unified_llm_client.py):
 
 ```mermaid
 flowchart TD
@@ -77,7 +77,7 @@ flowchart TD
 
 ## 4. DANH MỤC 26 SPECIALIZED TOOLS
 
-Toàn bộ 26 công cụ chuyên biệt được định nghĩa tại [medqa_multiagent/agents/tools.py](file:///Users/toilaluongg/Desktop/UIT%20-SDH/ML-Sec/GK/medqa_multiagent/agents/tools.py) theo định dạng **Function Calling Schema** chuẩn:
+Toàn bộ 26 công cụ chuyên biệt được định nghĩa tại [`medqa_multiagent/agents/tools.py`](../medqa_multiagent/agents/tools.py) theo định dạng **Function Calling Schema** chuẩn:
 
 | STT | Tên Tool | Agent Sở Hữu | Chức Năng Kỹ Thuật |
 |---|---|---|---|
@@ -112,7 +112,7 @@ Toàn bộ 26 công cụ chuyên biệt được định nghĩa tại [medqa_mul
 
 ## 5. ĐỘNG CƠ LUỒNG DAG EXECUTION ENGINE THUẦN PYTHON
 
-Nằm tại [medqa_multiagent/agents/dag.py](file:///Users/toilaluongg/Desktop/UIT%20-SDH/ML-Sec/GK/medqa_multiagent/agents/dag.py):
+Nằm tại [`medqa_multiagent/agents/dag.py`](../medqa_multiagent/agents/dag.py):
 
 - `DAGNode`: Quản lý tên node, hàm xử lý (`action_func`), và tập node phụ thuộc (`dependencies`).
 - `DAGGraph`: Quản lý sơ đồ đồ thị, tự động phát hiện lặp vòng (`detect_cycles`) và sắp xếp thứ tự ưu tiên tô-pô (`topological_sort`).

@@ -2,7 +2,7 @@
 
 **Dataset:** MedQA USMLE Test Set ($N = 1,270$ câu)  
 **Mô hình Đánh giá:** DeepSeek V3 Flash + Multi-Agent Architecture  
-**Log thô nguồn:** [`eval_results_full_1270_log.txt`](file:///Users/toilaluongg/Desktop/UIT%20-SDH/ML-Sec/GK/eval_results_full_1270_log.txt)
+**Log thô nguồn:** `eval_results_full_1270_log.txt` (tệp cục bộ, không được commit)
 
 ---
 

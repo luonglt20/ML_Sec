@@ -217,6 +217,15 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 .DS_Store
+.AppleDouble
+.LSOverride
+.Spotlight-V100/
+.Trashes/
+.idea/
+.vscode/
+node_modules/
+frontend/dist/
+*.local
 
 /data/rag_corpus/
 /data/rag_index/
@@ -227,7 +236,20 @@ __marimo__/
 /API Key*
 /.env
 /.env.*
+!/.env.example
 *.env
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+credentials.json
+secrets.json
+secrets.yaml
+secrets.yml
 *.log
 eval_results_full_1270_log.txt
 .system_generated/
@@ -240,5 +262,4 @@ eval_results_full_1270_log.txt
 /target-source.md
 /PLAN.md
 /triage-labels.md
-
 

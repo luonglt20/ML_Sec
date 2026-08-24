@@ -17,8 +17,32 @@ Hệ thống đánh giá chẩn đoán y khoa tự động **MedQA-USMLE Multi-A
 - **Tối ưu hoá Tiết kiệm Token toàn diện**:
   - **Fast-Path Early-Exit**: Ngắt sớm đối với các câu hỏi đơn giản, giảm từ 5 LLM calls xuống chỉ 2 LLM calls (giảm 60% Token tiêu thụ).
   - **TokenBudgetManager**: Cắt tỉa ngữ cảnh tài liệu y khoa < 350 từ (giảm 60% Prompt Tokens).
-- **Thực thử 20 ca bệnh lâm sàng (`data/dev.jsonl`)**: Đạt độ chính xác **80.0% Accuracy** (16/20 ca bệnh ĐÚNG) với tốc độ phản hồi cực nhanh trung bình **5.15 giây / ca**.
-- **100% Automated Test Suite Passed**: **266 / 266 unit tests PASSED**.
+- **Official MedQA-USMLE benchmark**: V3 đạt **93,23% accuracy** (1.184/1.270), cao hơn V0 **+3,46 điểm phần trăm** với McNemar `p < 0,001`.
+- **Trạng thái test hiện tại**: **261 passed, 5 failed**; các test còn lại liên quan đến validation cấu hình và fallback parser.
+
+---
+
+## 📊 Kết quả Benchmark Chính thức
+
+Benchmark sử dụng **1.270 bản ghi được chấm** từ MedQA-USMLE Official Test Set, model `deepseek-chat`, `temperature = 0.0` và `seed = 42`.
+
+| Variant | Correct / 1.270 | Accuracy | Invalid Rate | Avg Tokens / Q | Avg Latency | Total Cost |
+|---|---:|---:|---:|---:|---:|---:|
+| V0 — Direct LLM | 1.140 | 89,76% | 0,08% | 368 | 2,06 s | $0,2764 |
+| V1 — RAG-only | 1.152 | 90,71% | 0,08% | 1.174 | 2,01 s | $0,8905 |
+| V2 — Multi-agent w/o LTM | 1.165 | 91,73% | 0,16% | 3.365 | 2,95 s | $2,6060 |
+| **V3 — Full 5-Agent System** | **1.184** | **93,23%** | **0,16%** | **4.168** | **4,12 s** | **$3,3530** |
+| V4 — Full w/o Verifier | 1.172 | 92,28% | 0,24% | 4.151 | 3,85 s | $3,3054 |
+
+Kết quả chính:
+
+- V0 → V1 (RAG): **+0,94 điểm %**, McNemar `p = 0,0210`.
+- V1 → V2 (Multi-Agent): **+1,02 điểm %**, `p = 0,0175`.
+- V2 → V3 (Full System): **+1,50 điểm %**, `p = 0,0018`.
+- V4 → V3 (Verifier): **+0,94 điểm %**, `p = 0,0118`.
+- V0 → V3: **+3,46 điểm %**, bootstrap 95% CI **[+2,28; +4,65]**, McNemar `p < 0,001`.
+
+V3 đạt accuracy cao nhất nhưng chi phí API cao gấp khoảng **12,13 lần** và latency cao gấp **2 lần** V0. Xem phân tích đầy đủ trong [`eval_summary_report.md`](eval_summary_report.md).
 
 ---
 
@@ -97,21 +121,21 @@ python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 ```
 
-### 2. Chạy Automated Unit Tests (100% Pass)
+### 2. Chạy Automated Unit Tests
 
 ```bash
 PYTHONPATH=. .venv/bin/pytest
 ```
 
-*Kết quả*: **266 / 266 passed in 0.45s**.
+*Kết quả kiểm tra gần nhất (24/08/2026)*: **261 passed, 5 failed**. Các lỗi còn lại nằm trong `tests/test_config.py` và `tests/test_parsing.py`.
 
-### 3. Chạy Đánh giá Thực tế 20 Ca bệnh Lâm sàng
+### 3. Chạy Smoke Test 20 Ca bệnh Lâm sàng
 
 ```bash
 PYTHONPATH=. .venv/bin/python scripts/test_20_cases.py
 ```
 
-*Kết quả*: **80.0% Accuracy (16/20 đúng), Latency ~5.15s/ca**.
+Smoke test này dùng để kiểm tra nhanh pipeline; không thay thế benchmark chính thức 1.270 mẫu ở trên.
 
 ### 4. Chạy Giao diện Streamlit Demo UI
 

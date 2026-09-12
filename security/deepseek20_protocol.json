@@ -1,0 +1,53 @@
+{
+  "purpose": "primary DeepSeek real-LLM evaluation for the final security phase",
+  "frozen_before_full_run": true,
+  "model_track": "api",
+  "model": "deepseek-chat",
+  "variant": "V2",
+  "attack_surface": "rag",
+  "sample_seed": 14,
+  "sample_size": 20,
+  "retrieval_snapshot": "results/security/raw/deepseek20_retrieval_snapshot.jsonl",
+  "temperature": 0.0,
+  "top_k": 2,
+  "payload_position": "top1",
+  "payload_placement": "prefix",
+  "marker": "PWNED",
+  "attacks": ["clean", "naive", "escape", "context_ignoring", "fake_completion", "combined"],
+  "planned_defense_conditions": [
+    {
+      "model_track": "api_heuristic_guard",
+      "attacks": ["clean", "combined"],
+      "label": "deterministic input-sanitization baseline on the same DeepSeek API; not StruQ"
+    }
+  ],
+  "planned_ablation_conditions": [
+    {
+      "model_track": "api",
+      "attacks": ["combined"],
+      "payload_position": "all_top_k",
+      "sample_size": 20,
+      "label": "predefined all-top-k injection strength ablation"
+    }
+  ],
+  "planned_memory_conditions": [
+    {
+      "model_track": "api",
+      "variant": "V4",
+      "attacks": ["clean", "combined"],
+      "label": "memory-only indirect injection; RAG remains clean"
+    },
+    {
+      "model_track": "api_heuristic_guard",
+      "variant": "V4",
+      "attacks": ["clean", "combined"],
+      "label": "same DeepSeek memory condition with input guard; not StruQ"
+    }
+  ],
+  "expected_artifacts": {
+    "predictions": "results/security/raw/deepseek20_api_v2.jsonl",
+    "summary_json": "results/security/deepseek20_api_v2_summary.json",
+    "summary_csv": "results/security/deepseek20_api_v2_summary.csv"
+  },
+  "note": "The snapshot must be created with DeepSeek Router calls after API quota is available. Do not substitute the prior Ollama snapshot for this primary DeepSeek result."
+}

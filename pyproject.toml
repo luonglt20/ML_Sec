@@ -10,6 +10,12 @@ dependencies = []
 dev = ["pytest>=7.0"]
 ui = ["streamlit>=1.28"]
 rag = ["faiss-cpu>=1.7", "transformers>=4.30", "torch>=2.0", "numpy>=1.25"]
+security = [
+  "transformers>=4.40",
+  "torch>=2.0",
+  "accelerate>=0.28",
+  "bitsandbytes>=0.43; platform_system != 'Darwin'",
+]
 
 [project.scripts]
 medqa-multiagent = "medqa_multiagent.cli:main"

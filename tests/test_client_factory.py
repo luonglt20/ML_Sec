@@ -48,3 +48,15 @@ def test_build_llm_client_uses_default_cache_dir_when_not_given(tmp_path, monkey
     client_factory.build_llm_client(config)
 
     assert (tmp_path / client_factory.DEFAULT_CACHE_DIR).is_dir()
+
+
+def test_build_uncached_llm_client_sends_identical_prompts_twice(monkeypatch):
+    fake = FakeLLMClient(["Final Answer: A", "Final Answer: A"])
+    monkeypatch.setattr(client_factory, "create_llm_client", lambda model: fake)
+    config = make_config()
+
+    client = client_factory.build_uncached_llm_client(config)
+    client.complete(role="direct", prompt="Q?", model=config.model, temperature=0.0)
+    client.complete(role="direct", prompt="Q?", model=config.model, temperature=0.0)
+
+    assert len(fake.calls) == 2

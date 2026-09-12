@@ -129,7 +129,7 @@ def run_real_eval(sample_size: int, dataset_file: str, max_workers: int = 30):
     print("=" * 105)
 
     llm_client = UnifiedLLMClient()
-    print("[Engine] UnifiedLLMClient initialized (DeepSeek Flash API Key: sk-38d925c2ccee... prioritized).")
+    print("[Engine] UnifiedLLMClient initialized (credentials loaded from environment).")
 
     data_path = PROJECT_ROOT / "data" / dataset_file
     if not data_path.exists():

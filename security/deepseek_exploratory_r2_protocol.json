@@ -1,0 +1,19 @@
+{
+  "purpose": "exploratory, source-frozen indirect prompt-injection stress test after r2 harness hardening",
+  "status": "locked_before_smoke",
+  "baseline_manifest": "security/midterm_baseline_manifest.json",
+  "model": "deepseek-chat",
+  "temperature": 0.0,
+  "sample_size": 20,
+  "smoke_size": 5,
+  "sample_seed": 14,
+  "snapshot": "results/security/raw/deepseek20_retrieval_snapshot.jsonl",
+  "payload_revision": "opi_medqa_r2",
+  "defense_policy_revision": "guard_r2_unicode_encoded_role_boundaries",
+  "conditions": [
+    {"attack_family": "clean", "position": "all_top_k", "placement": "sandwich"},
+    {"attack_family": "chained_completion", "position": "all_top_k", "placement": "sandwich"}
+  ],
+  "threat_model": "Only a read-only in-memory copy of already retrieved passage text is altered. Corpus, vector index, rankings, IDs, scores, agents, entrypoint and default workflow remain unchanged.",
+  "locked_rule": "Do not alter the r2 payload, guard policy, sample, decoding or snapshot after inspecting smoke output. A full run must use the same protocol and a new immutable raw output."
+}

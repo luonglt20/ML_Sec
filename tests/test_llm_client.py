@@ -6,6 +6,7 @@ import pytest
 
 from medqa_multiagent.llm_client import (
     LoggingLLMClient,
+    OllamaClient,
     OpenAICompatibleClient,
     UnknownModelError,
     create_llm_client,
@@ -73,6 +74,29 @@ def test_openai_compatible_client_parses_response():
     assert response.prompt == "hello"
     assert response.role == "direct"
     assert response.cache_hit is False
+
+
+def test_ollama_client_applies_configured_output_limit():
+    body = {
+        "message": {"content": "Final Answer: B"},
+        "prompt_eval_count": 9,
+        "eval_count": 3,
+    }
+    client = OllamaClient(max_new_tokens=77)
+
+    with patch(
+        "medqa_multiagent.llm_client.urllib.request.urlopen",
+        return_value=_fake_http_response(body),
+    ) as mock_open:
+        response = client.complete(
+            role="reasoner", prompt="hello", model="ollama/gemma3:4b", temperature=0.0
+        )
+
+    request = mock_open.call_args.args[0]
+    payload = json.loads(request.data.decode("utf-8"))
+    assert payload["model"] == "gemma3:4b"
+    assert payload["options"]["num_predict"] == 77
+    assert response.total_tokens == 12
 
 
 def test_logging_llm_client_delegates_and_logs(caplog):

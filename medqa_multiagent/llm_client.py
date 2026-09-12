@@ -161,6 +161,124 @@ class OpenAICompatibleClient:
         )
 
 
+class OllamaClient:
+    """Local Ollama chat client for reproducible real-LLM evaluation.
+
+    ``ollama/<model>`` identifiers are handled by ``create_llm_client``. The
+    client has no API key and reports Ollama's actual prompt/evaluation token
+    counts and generation duration. It can optionally render a structured
+    frontend query for the explicitly-labelled frontend-only ablation; this
+    does not turn an arbitrary Ollama model into StruQ.
+    """
+
+    def __init__(
+        self,
+        base_url: str = "http://127.0.0.1:11434",
+        timeout: float = 300.0,
+        use_structured_queries: bool = False,
+        max_new_tokens: int = 256,
+    ) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._timeout = timeout
+        self.use_structured_queries = use_structured_queries
+        if max_new_tokens <= 0:
+            raise ValueError("max_new_tokens must be positive")
+        self.max_new_tokens = max_new_tokens
+        self.sanitization_events = 0
+        self.structured_queries = 0
+
+    @staticmethod
+    def _ollama_model_name(model: str) -> str:
+        return model.split("/", 1)[1] if model.startswith("ollama/") else model
+
+    def _complete_prompt(
+        self,
+        role: str,
+        prompt: str,
+        model: str,
+        temperature: float,
+        retrieved_context_id: Optional[str],
+    ) -> LLMResponse:
+        payload = {
+            "model": self._ollama_model_name(model),
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+            "options": {
+                "temperature": temperature,
+                "num_predict": self.max_new_tokens,
+            },
+        }
+        request = urllib.request.Request(
+            f"{self._base_url}/api/chat",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        start = time.monotonic()
+        try:
+            with urllib.request.urlopen(request, timeout=self._timeout) as response:
+                body = json.loads(response.read().decode("utf-8"))
+        except urllib.error.URLError as exc:
+            raise RuntimeError(
+                "Ollama is unavailable. Start it with `ollama serve` and verify "
+                "that the selected model is installed."
+            ) from exc
+        latency = time.monotonic() - start
+        text = str(body.get("message", {}).get("content", ""))
+        prompt_tokens = int(body.get("prompt_eval_count", 0))
+        completion_tokens = int(body.get("eval_count", 0))
+        return LLMResponse(
+            text=text,
+            model=f"ollama/{self._ollama_model_name(model)}",
+            temperature=temperature,
+            prompt=prompt,
+            role=role,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+            latency_seconds=latency,
+            retrieved_context_id=retrieved_context_id,
+        )
+
+    def complete(
+        self,
+        role: str,
+        prompt: str,
+        model: str,
+        temperature: float,
+        retrieved_context_id: Optional[str] = None,
+    ) -> LLMResponse:
+        if self.use_structured_queries:
+            from .security.structured import StructuredQuery, compose_struq_prompt
+
+            prompt = compose_struq_prompt(
+                StructuredQuery(instruction=prompt, data=""), apply_filter=True
+            )
+        return self._complete_prompt(
+            role, prompt, model, temperature, retrieved_context_id
+        )
+
+    def complete_structured(
+        self,
+        role: str,
+        query: object,
+        model: str,
+        temperature: float,
+        retrieved_context_id: Optional[str] = None,
+    ) -> LLMResponse:
+        from .security.structured import StructuredQuery, compose_struq_prompt, recursive_filter
+
+        if not isinstance(query, StructuredQuery):
+            raise TypeError("query must be a StructuredQuery")
+        self.structured_queries += 1
+        if recursive_filter(query.data) != query.data:
+            self.sanitization_events += 1
+        prompt = compose_struq_prompt(query, apply_filter=True)
+        return self._complete_prompt(
+            role, prompt, model, temperature, retrieved_context_id
+        )
+
+
 def create_llm_client(model: str) -> LLMClient:
     """Build the `LLMClient` for `model`, via the provider registry.
 
@@ -174,6 +292,9 @@ def create_llm_client(model: str) -> LLMClient:
         RuntimeError: if the provider's required API key environment
             variable isn't set.
     """
+    if model.startswith("ollama/"):
+        return OllamaClient(base_url=os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434"))
+
     provider = _PROVIDER_REGISTRY.get(model)
     if provider is None:
         raise UnknownModelError(

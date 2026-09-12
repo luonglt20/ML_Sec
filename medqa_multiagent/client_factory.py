@@ -23,16 +23,30 @@ from .llm_client import LLMClient, LoggingLLMClient, create_llm_client
 DEFAULT_CACHE_DIR = ".cache/llm"
 
 
+def _build_provider_client(config: RunConfig) -> LLMClient:
+    """Create the provider client selected by a run configuration."""
+    if config.model in ("unified", "auto", "groq", "gemini", "deepseek"):
+        from .unified_llm_client import UnifiedLLMClient
+        return UnifiedLLMClient()
+    return create_llm_client(config.model)
+
+
+def build_uncached_llm_client(config: RunConfig) -> LLMClient:
+    """Build a logging client that sends every call to the provider.
+
+    Security evaluation must measure each clean/attack/defense condition as a
+    distinct real model invocation. It therefore cannot use the normal prompt
+    cache, because a sanitizer can deliberately make an attacked prompt render
+    identically to a clean one.
+    """
+    return LoggingLLMClient(_build_provider_client(config))
+
+
 def build_llm_client(
     config: RunConfig, cache_dir: Union[str, Path] = DEFAULT_CACHE_DIR
 ) -> LLMClient:
     """Build the standard cache- and logging-wrapped `LLMClient` for `config.model`."""
-    if config.model in ("unified", "auto", "groq", "gemini", "deepseek"):
-        from .unified_llm_client import UnifiedLLMClient
-        inner: LLMClient = UnifiedLLMClient()
-    else:
-        inner = create_llm_client(config.model)
+    inner = _build_provider_client(config)
 
     cached = OnDiskLLMCache(inner, cache_dir)
     return LoggingLLMClient(cached)
-

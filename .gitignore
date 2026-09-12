@@ -229,6 +229,18 @@ frontend/dist/
 
 /data/rag_corpus/
 /data/rag_index/
+/data/rag_corpus_real20/
+/data/rag_index_real20/
+
+# Final-project security evaluation: local-only large/raw artifacts
+/checkpoints/
+/models/
+/results/security/raw/
+/results/security/**/*.jsonl
+/results/security/**/*.log
+*.safetensors
+*.bin.index.json
+pytorch_model*.bin
 
 # Local configs and API keys
 /API Key
@@ -262,4 +274,3 @@ eval_results_full_1270_log.txt
 /target-source.md
 /PLAN.md
 /triage-labels.md
-

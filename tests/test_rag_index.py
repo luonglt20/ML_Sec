@@ -2,7 +2,7 @@ import pytest
 
 faiss = pytest.importorskip("faiss")
 
-from medqa_multiagent.rag.index import FaissFlatIndex  # noqa: E402
+from medqa_multiagent.rag.index import FaissFlatIndex, NumpyFlatIndex  # noqa: E402
 
 
 def test_build_and_search_returns_nearest_vector_first():
@@ -53,3 +53,21 @@ def test_save_and_load_round_trips(tmp_path):
 def test_load_raises_for_missing_index(tmp_path):
     with pytest.raises(FileNotFoundError):
         FaissFlatIndex.load(tmp_path / "does-not-exist")
+
+
+def test_numpy_index_exact_search_and_load(tmp_path):
+    import json
+    import numpy as np
+
+    np.save(
+        tmp_path / "vectors.npy",
+        np.asarray([[1.0, 0.0], [0.0, 1.0], [0.9, 0.1]], dtype="float32"),
+    )
+    (tmp_path / "passage_ids.json").write_text(
+        json.dumps(["p1", "p2", "p3"]), encoding="utf-8"
+    )
+    index = NumpyFlatIndex.load(tmp_path)
+
+    results = index.search([1.0, 0.0], top_k=2)
+
+    assert [passage_id for passage_id, _ in results] == ["p1", "p3"]

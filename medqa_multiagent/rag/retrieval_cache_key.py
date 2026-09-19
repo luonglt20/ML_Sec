@@ -12,9 +12,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+from typing import Mapping, Optional
 
 
-def compute_retrieval_cache_key(query: str, top_k: int, index_id: str) -> str:
+def compute_retrieval_cache_key(
+    query: str,
+    top_k: int,
+    index_id: str,
+    options: Optional[Mapping[str, str]] = None,
+) -> str:
     """Derive a stable, content-addressed cache key for one retrieval call.
 
     Args:
@@ -29,5 +35,9 @@ def compute_retrieval_cache_key(query: str, top_k: int, index_id: str) -> str:
         above parameters.
     """
     payload = {"query": query, "top_k": int(top_k), "index_id": index_id}
+    if options is not None:
+        # Option-guided boosting makes options part of retrieval semantics.
+        # json.dumps(sort_keys=True) makes mapping insertion order irrelevant.
+        payload["options"] = dict(options)
     canonical = json.dumps(payload, sort_keys=True, ensure_ascii=True)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

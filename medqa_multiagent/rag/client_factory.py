@@ -17,15 +17,17 @@ on immediately.
 from __future__ import annotations
 
 import functools
+import os
+import platform
 import time
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
 
 from ..config import RunConfig
 from .corpus import read_chunks
 from .embedding_cache import OnDiskEmbeddingCache
 from .embeddings import EmbeddingClient, MedCptEmbeddingClient
-from .index import FaissFlatIndex, PassageRecord
+from .index import FaissFlatIndex, NumpyFlatIndex, PassageRecord
 from .retrieval_cache import OnDiskRetrievalCache
 from .retriever import IndexBackedRetriever, Retriever
 
@@ -76,12 +78,28 @@ def _build_retriever_cached(
     use_mmr: bool = False,
     mmr_lambda: float = 0.7,
     use_hyde: bool = False,
+    vector_backend: str = "auto",
 ) -> Retriever:
     """Build (and process-wide cache) the retriever stack for one index dir."""
     _t0 = time.monotonic()
     index_path = Path(index_dir)
     passages = _load_passages(index_path)
-    vector_index = FaissFlatIndex.load(index_path)
+    resolved_backend = vector_backend
+    if resolved_backend == "auto":
+        # The macOS faiss-cpu and PyTorch wheels can bundle incompatible
+        # libomp copies. Prefer the persisted NumPy matrix there to prevent a
+        # native abort/segfault at the first search.
+        has_numpy_index = (index_path / "vectors.npy").exists()
+        resolved_backend = (
+            "numpy" if platform.system() == "Darwin" and has_numpy_index else "faiss"
+        )
+    if resolved_backend == "numpy":
+        vector_index = NumpyFlatIndex.load(index_path)
+        print("[RAG] Using NumPy exact-search backend (macOS-safe)", flush=True)
+    elif resolved_backend == "faiss":
+        vector_index = FaissFlatIndex.load(index_path)
+    else:
+        raise ValueError("MEDQA_VECTOR_BACKEND must be 'auto', 'numpy', or 'faiss'")
 
     bm25_index = None
     if use_hybrid:
@@ -129,9 +147,11 @@ def build_retriever(
     index_dir: Union[str, Path, None] = None,
     embedding_cache_dir: Union[str, Path] = DEFAULT_EMBEDDING_CACHE_DIR,
     retrieval_cache_dir: Union[str, Path] = DEFAULT_RETRIEVAL_CACHE_DIR,
+    vector_backend: Optional[str] = None,
 ) -> Retriever:
     """Build the standard cache-wrapped `Retriever` for `config.rag_index_dir`."""
     resolved_index_dir = str(index_dir if index_dir is not None else config.rag_index_dir)
+    resolved_backend = vector_backend or os.environ.get("MEDQA_VECTOR_BACKEND", "auto")
     return _build_retriever_cached(
         resolved_index_dir,
         str(embedding_cache_dir),
@@ -149,6 +169,5 @@ def build_retriever(
         getattr(config, "rag_use_mmr", False),
         getattr(config, "rag_mmr_lambda", 0.7),
         getattr(config, "rag_use_hyde", False),
+        resolved_backend.lower(),
     )
-
-

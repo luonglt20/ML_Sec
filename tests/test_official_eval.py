@@ -2,7 +2,10 @@ import inspect
 
 from medqa_multiagent import official_eval, sampling
 from medqa_multiagent.config import RunConfig
-from medqa_multiagent.official_eval import sample_official_test_set
+from medqa_multiagent.official_eval import (
+    sample_official_test_set,
+    take_first_official_test_set,
+)
 from medqa_multiagent.sampling import sample_dev_set
 
 
@@ -82,3 +85,23 @@ def test_sampling_module_exposes_no_test_accessing_function():
 def test_official_eval_module_is_the_distinct_home_of_test_access():
     assert hasattr(official_eval, "sample_official_test_set")
     assert "official" in official_eval.sample_official_test_set.__name__
+
+
+def test_take_first_official_test_set_preserves_source_order():
+    test_pool = make_pool(100, "test")
+
+    result = take_first_official_test_set(test_pool, 50)
+
+    assert result == test_pool[:50]
+    assert result[0] == "test-0"
+    assert result[-1] == "test-49"
+
+
+def test_take_first_official_test_set_validates_size():
+    for invalid_size in (0, -1, 4):
+        try:
+            take_first_official_test_set(["test-0", "test-1"], invalid_size)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"expected ValueError for size={invalid_size}")

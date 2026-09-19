@@ -46,3 +46,18 @@ def sample_official_test_set(
         config.seed,
         label=OFFICIAL_TEST_SAMPLE_LABEL,
     )
+
+
+def take_first_official_test_set(test_questions: Sequence[T], size: int) -> list:
+    """Return the first ``size`` official-test records in source-file order.
+
+    This explicit path exists for reproducibility requests that specify the
+    first N benchmark questions rather than a seeded random sample.
+    """
+    if size <= 0:
+        raise ValueError("official test size must be a positive integer")
+    if size > len(test_questions):
+        raise ValueError(
+            f"Cannot take {size} questions from a test pool of {len(test_questions)}"
+        )
+    return list(test_questions[:size])

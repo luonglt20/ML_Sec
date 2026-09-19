@@ -144,6 +144,43 @@ Smoke test này dùng để kiểm tra nhanh pipeline; không thay thế benchma
 .venv/bin/streamlit run medqa_multiagent/ui/app.py
 ```
 
+### 5. Tái mô phỏng Prompt Injection
+
+Harness này điều chỉnh 5 chiến lược từ
+[Open-Prompt-Injection](https://github.com/liu00222/Open-Prompt-Injection)
+cho bài toán MedQA: `naive`, `escape`, `ignore`, `fake_completion`, và
+`combine`. Mỗi câu được chạy theo cặp clean/attacked; injected task yêu cầu
+một đáp án sai xác định trước để đo targeted attack success rate (ASR).
+
+Benchmark 50 câu đầu của official test set trên toàn bộ V0–V4, trước và sau
+tấn công `combine`:
+
+```bash
+PYTHONPATH=. .venv/bin/python scripts/run_prompt_injection.py \
+  --config config_deepseek.json \
+  --data data/test.jsonl \
+  --first 50 \
+  --variant all \
+  --strategy combine \
+  --progress-every 1 \
+  --output results/test_first50_v0_v4_clean_vs_combine.json
+```
+
+`--variant all` là mặc định; vẫn có thể truyền riêng `V0`, `V1`, ..., `V4`.
+`--first 50` giữ nguyên thứ tự file, tức `test-00000` đến `test-00049`, và
+không dùng random sampling hay `official_test_sample_size` trong config.
+V1–V4 cần RAG index như benchmark thông thường. Báo cáo JSON chứa toàn bộ
+clean/attacked traces cùng các chỉ số `clean_accuracy`, `attacked_accuracy`,
+`accuracy_drop`, `attack_success_rate`, ASR có điều kiện trên các câu clean
+đúng, `prediction_flip_rate`, và invalid rates.
+Trong lúc chạy, terminal hiển thị progress bar và các chỉ số tích lũy sau
+từng câu. Runner đồng thời tạo dashboard Markdown
+`results/test_first50_v0_v4_clean_vs_combine.md` để so sánh V0–V4.
+
+Trên macOS, retriever tự động dùng ma trận `vectors.npy` với exact search
+NumPy để tránh xung đột `libomp` giữa PyTorch và FAISS. Có thể ép backend
+bằng biến môi trường `MEDQA_VECTOR_BACKEND=numpy` hoặc `faiss`.
+
 ---
 
 ## 📈 Thang đo 5 Biến thể Đánh giá (System Variant Ladder)

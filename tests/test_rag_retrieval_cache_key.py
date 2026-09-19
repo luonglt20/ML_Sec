@@ -25,6 +25,20 @@ def test_differing_index_id_changes_the_key():
     assert a != b
 
 
+def test_differing_options_change_key_but_mapping_order_does_not():
+    a = compute_retrieval_cache_key(
+        "query", 3, "index", {"A": "alpha", "B": "beta"}
+    )
+    reordered = compute_retrieval_cache_key(
+        "query", 3, "index", {"B": "beta", "A": "alpha"}
+    )
+    changed = compute_retrieval_cache_key(
+        "query", 3, "index", {"A": "alpha", "B": "changed"}
+    )
+    assert a == reordered
+    assert a != changed
+
+
 def test_key_is_a_64_char_hex_digest():
     key = compute_retrieval_cache_key("query", 3, "data/rag_index")
     assert len(key) == 64

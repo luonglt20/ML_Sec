@@ -230,6 +230,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"  embedded {min(start + batch_size, len(embed_chunks))}/{len(embed_chunks)} passages...")
 
     print("Building FAISS flat index ...")
+    import numpy as np
+    index_dir.mkdir(parents=True, exist_ok=True)
+    np.save(index_dir / "vectors.npy", np.asarray(vectors, dtype="float32"))
     index = FaissFlatIndex.build(vectors, [chunk.chunk_id for chunk in embed_chunks])
     index.save(index_dir)
     mode_label = "hierarchical" if use_hierarchical else "flat"
@@ -241,4 +244,3 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

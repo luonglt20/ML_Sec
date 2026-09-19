@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 from pathlib import Path
-from typing import List, Union
+from typing import List, Mapping, Optional, Union
 
 from .retrieval_cache_key import compute_retrieval_cache_key
 from .retriever import Passage, Retriever
@@ -40,15 +40,20 @@ class OnDiskRetrievalCache:
     def _path_for_key(self, key: str) -> Path:
         return self._cache_dir / f"{key}.json"
 
-    def retrieve(self, query: str, top_k: int) -> List[Passage]:
-        key = compute_retrieval_cache_key(query, top_k, self._index_id)
+    def retrieve(
+        self,
+        query: str,
+        top_k: int,
+        options: Optional[Mapping[str, str]] = None,
+    ) -> List[Passage]:
+        key = compute_retrieval_cache_key(query, top_k, self._index_id, options)
         path = self._path_for_key(key)
 
         if path.exists():
             data = json.loads(path.read_text(encoding="utf-8"))
             return [Passage(**item) for item in data]
 
-        passages = self._retriever.retrieve(query, top_k)
+        passages = self._retriever.retrieve(query, top_k, options)
         path.write_text(
             json.dumps([asdict(passage) for passage in passages], ensure_ascii=True),
             encoding="utf-8",

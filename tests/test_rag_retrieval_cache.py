@@ -51,6 +51,17 @@ def test_differing_index_id_is_a_cache_miss(tmp_path):
     assert len(fake.calls) == 2
 
 
+def test_options_are_forwarded_and_part_of_cache_identity(tmp_path):
+    fake = FakeRetriever(make_passages())
+    cache = OnDiskRetrievalCache(fake, tmp_path, index_id="index")
+
+    cache.retrieve("query", top_k=1, options={"A": "alpha"})
+    cache.retrieve("query", top_k=1, options={"A": "beta"})
+    cache.retrieve("query", top_k=1, options={"A": "beta"})
+
+    assert len(fake.calls) == 2
+
+
 def test_cache_persists_across_instances(tmp_path):
     first_retriever = FakeRetriever(make_passages())
     OnDiskRetrievalCache(first_retriever, tmp_path, index_id="idx").retrieve("query", top_k=2)

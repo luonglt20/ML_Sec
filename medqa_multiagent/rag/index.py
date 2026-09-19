@@ -24,6 +24,7 @@ from typing import List, Optional, Protocol, Sequence, Tuple, Union
 
 _INDEX_FILENAME = "index.faiss"
 _IDS_FILENAME = "passage_ids.json"
+_VECTORS_FILENAME = "vectors.npy"
 
 
 @dataclass(frozen=True)
@@ -142,3 +143,67 @@ class FaissFlatIndex:
         index = faiss.read_index(str(index_path))
         passage_ids = json.loads(ids_path.read_text(encoding="utf-8"))
         return cls(index, passage_ids)
+
+
+class NumpyFlatIndex:
+    """Exact inner-product search without FAISS's OpenMP runtime.
+
+    This backend is useful on macOS when PyTorch and the ``faiss-cpu`` wheel
+    bundle different copies of ``libomp``.  Loading both copies in one process
+    can abort at the first FAISS search.  NumPy can search the persisted
+    embedding matrix exactly and avoids that unsafe native-library collision.
+    """
+
+    def __init__(self, vectors, passage_ids: List[str]) -> None:
+        if len(vectors) != len(passage_ids):
+            raise ValueError(
+                f"vectors ({len(vectors)}) and passage_ids ({len(passage_ids)}) "
+                "must have the same length"
+            )
+        self._vectors = vectors
+        self._passage_ids = passage_ids
+
+    def search(
+        self, query_vector: Sequence[float], top_k: int
+    ) -> List[Tuple[str, float]]:
+        import numpy as np
+
+        query = np.asarray(query_vector, dtype="float32")
+        if query.ndim != 1 or query.shape[0] != self._vectors.shape[1]:
+            raise ValueError(
+                f"query vector dimension {query.shape} does not match "
+                f"index dimension {self._vectors.shape[1]}"
+            )
+        k = min(top_k, len(self._passage_ids))
+        if k <= 0:
+            return []
+        scores = self._vectors @ query
+        if k == len(scores):
+            candidate_indices = np.arange(len(scores))
+        else:
+            candidate_indices = np.argpartition(scores, -k)[-k:]
+        ranked_indices = candidate_indices[
+            np.argsort(scores[candidate_indices], kind="stable")[::-1]
+        ]
+        return [
+            (self._passage_ids[int(idx)], float(scores[int(idx)]))
+            for idx in ranked_indices
+        ]
+
+    @classmethod
+    def load(cls, directory: Union[str, Path]) -> "NumpyFlatIndex":
+        import numpy as np
+
+        directory = Path(directory)
+        vectors_path = directory / _VECTORS_FILENAME
+        ids_path = directory / _IDS_FILENAME
+        if not vectors_path.exists() or not ids_path.exists():
+            raise FileNotFoundError(
+                f"No NumPy RAG index found at {directory}; expected "
+                f"{_VECTORS_FILENAME} and {_IDS_FILENAME}. Rebuild the RAG index."
+            )
+        vectors = np.load(vectors_path, mmap_mode="r")
+        if vectors.ndim != 2:
+            raise ValueError(f"RAG vectors must be a 2-D matrix, got {vectors.shape}")
+        passage_ids = json.loads(ids_path.read_text(encoding="utf-8"))
+        return cls(vectors, passage_ids)

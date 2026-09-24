@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import socket
 import time
 import urllib.error
 import urllib.request
@@ -106,10 +107,31 @@ class OpenAICompatibleClient:
     differ, which `create_llm_client` supplies from the provider registry.
     """
 
-    def __init__(self, base_url: str, api_key: str, timeout: float = 60.0) -> None:
+    def __init__(
+        self, base_url: str, api_key: str, timeout: float | None = None
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
-        self._timeout = timeout
+        self._timeout = (
+            timeout
+            if timeout is not None
+            else float(os.environ.get("MEDQA_LLM_TIMEOUT_SECONDS", "180"))
+        )
+        self._max_retries = int(os.environ.get("MEDQA_LLM_MAX_RETRIES", "4"))
+        if self._timeout <= 0:
+            raise ValueError("LLM request timeout must be positive")
+        if self._max_retries < 0:
+            raise ValueError("MEDQA_LLM_MAX_RETRIES must be non-negative")
+
+    @staticmethod
+    def _retry_delay(attempt: int, retry_after: str | None = None) -> float:
+        """Return a bounded exponential-backoff delay, honoring Retry-After."""
+        if retry_after:
+            try:
+                return min(float(retry_after), 60.0)
+            except ValueError:
+                pass
+        return min(2.0**attempt, 30.0)
 
     def complete(
         self,
@@ -135,14 +157,41 @@ class OpenAICompatibleClient:
         )
 
         start = time.monotonic()
-        try:
-            with urllib.request.urlopen(request, timeout=self._timeout) as response:
-                body = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(
-                f"LLM provider request failed ({exc.code}): {detail}"
-            ) from exc
+        for attempt in range(self._max_retries + 1):
+            try:
+                with urllib.request.urlopen(request, timeout=self._timeout) as response:
+                    body = json.loads(response.read().decode("utf-8"))
+                break
+            except urllib.error.HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="replace")
+                retryable = exc.code == 429 or 500 <= exc.code < 600
+                if not retryable or attempt == self._max_retries:
+                    raise RuntimeError(
+                        f"LLM provider request failed ({exc.code}): {detail}"
+                    ) from exc
+                delay = self._retry_delay(attempt, exc.headers.get("Retry-After"))
+                logging.warning(
+                    "LLM request returned HTTP %s; retrying in %.1fs (%s/%s)",
+                    exc.code,
+                    delay,
+                    attempt + 1,
+                    self._max_retries,
+                )
+            except (TimeoutError, socket.timeout, urllib.error.URLError) as exc:
+                if attempt == self._max_retries:
+                    raise RuntimeError(
+                        "LLM provider request timed out or could not connect after "
+                        f"{self._max_retries + 1} attempt(s)"
+                    ) from exc
+                delay = self._retry_delay(attempt)
+                logging.warning(
+                    "LLM request failed with %s; retrying in %.1fs (%s/%s)",
+                    type(exc).__name__,
+                    delay,
+                    attempt + 1,
+                    self._max_retries,
+                )
+            time.sleep(delay)
         latency = time.monotonic() - start
 
         text = body["choices"][0]["message"]["content"]

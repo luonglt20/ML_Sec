@@ -75,6 +75,30 @@ def test_openai_compatible_client_parses_response():
     assert response.cache_hit is False
 
 
+def test_openai_compatible_client_retries_timeout(monkeypatch):
+    monkeypatch.setenv("MEDQA_LLM_MAX_RETRIES", "1")
+    body = {
+        "choices": [{"message": {"content": "Final Answer: B"}}],
+        "usage": {},
+    }
+    client = OpenAICompatibleClient(base_url="https://example.com/v1", api_key="key")
+
+    with (
+        patch(
+            "medqa_multiagent.llm_client.urllib.request.urlopen",
+            side_effect=[TimeoutError(), _fake_http_response(body)],
+        ) as urlopen,
+        patch("medqa_multiagent.llm_client.time.sleep") as sleep,
+    ):
+        response = client.complete(
+            role="direct", prompt="hello", model="gpt-4o-mini", temperature=0.0
+        )
+
+    assert response.text == "Final Answer: B"
+    assert urlopen.call_count == 2
+    sleep.assert_called_once_with(1.0)
+
+
 def test_logging_llm_client_delegates_and_logs(caplog):
     client = FakeLLMClient(["Final Answer: A"])
     logging_client = LoggingLLMClient(client)

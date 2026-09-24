@@ -15,6 +15,8 @@ from medqa_multiagent.entrypoint import SUPPORTED_VARIANTS
 from medqa_multiagent.official_eval import take_first_official_test_set
 from medqa_multiagent.prompt_injection import (
     ATTACK_STRATEGIES,
+    AttackMetrics,
+    AttackRecord,
     evaluate_prompt_injection,
     write_attack_report,
     write_benchmark_summary,
@@ -59,6 +61,17 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="Refresh live metrics every N completed questions (default: 1).",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Maximum concurrent question flows (default: 1).",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Reuse complete variants from an existing multi-variant output report.",
+    )
     parser.add_argument("--env-file", default=".env")
     parser.add_argument("--cache-dir", default=DEFAULT_CACHE_DIR)
     parser.add_argument("--rag-index-dir", default=None)
@@ -75,7 +88,6 @@ def _build_retriever(args: argparse.Namespace, config: RunConfig):
         DEFAULT_RETRIEVAL_CACHE_DIR,
         build_retriever,
     )
-
     return build_retriever(
         config,
         index_dir=args.rag_index_dir,
@@ -84,12 +96,44 @@ def _build_retriever(args: argparse.Namespace, config: RunConfig):
     )
 
 
+def _load_completed_variant_results(
+    output_path: str, strategy: str, expected_count: int
+) -> dict[str, tuple[list[AttackRecord], AttackMetrics]]:
+    """Load only complete, compatible variants from a checkpoint report."""
+    path = Path(output_path)
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Cannot resume: {path} is not valid JSON ({exc})") from exc
+    if payload.get("strategy") != strategy:
+        raise SystemExit(
+            f"Cannot resume: checkpoint strategy is {payload.get('strategy')!r}, "
+            f"not {strategy!r}"
+        )
+    if payload.get("metadata", {}).get("question_count") != expected_count:
+        raise SystemExit(
+            "Cannot resume: checkpoint question count does not match this run"
+        )
+
+    results: dict[str, tuple[list[AttackRecord], AttackMetrics]] = {}
+    for variant, variant_payload in payload.get("variants", {}).items():
+        records = [AttackRecord(**record) for record in variant_payload["records"]]
+        if len(records) != expected_count:
+            continue
+        results[variant] = (records, AttackMetrics(**variant_payload["metrics"]))
+    return results
+
+
 def main() -> int:
     args = build_parser().parse_args()
     load_env_file(args.env_file)
     config = RunConfig.from_json_file(args.config)
     if args.progress_every <= 0:
         raise SystemExit("--progress-every must be a positive integer")
+    if args.workers <= 0:
+        raise SystemExit("--workers must be a positive integer")
     pool = load_questions(args.data)
     if args.first is not None:
         sample = take_first_official_test_set(pool, args.first)
@@ -121,7 +165,8 @@ def main() -> int:
             return
         width = 20
         filled = round(width * completed / total)
-        bar = "█" * filled + "░" * (width - filled)
+        # Use ASCII only: Windows PowerShell may expose stdout as cp1252.
+        bar = "#" * filled + "-" * (width - filled)
         print(
             f"[{record.variant}] [{bar}] {completed:>2}/{total} "
             f"clean={metrics.clean_accuracy * 100:5.1f}% "
@@ -133,8 +178,18 @@ def main() -> int:
         )
 
     if args.variant == "all":
-        results = {}
+        results = (
+            _load_completed_variant_results(args.output, args.strategy, len(sample))
+            if args.resume
+            else {}
+        )
         for variant in SUPPORTED_VARIANTS:
+            if variant in results:
+                print(
+                    f"[Prompt Injection] Resuming: reusing checkpointed {variant}.",
+                    flush=True,
+                )
+                continue
             print(f"[Prompt Injection] Running {variant} ...", flush=True)
             results[variant] = evaluate_prompt_injection(
                 sample,
@@ -144,6 +199,7 @@ def main() -> int:
                 client,
                 retriever,
                 progress_callback=show_progress,
+                max_workers=args.workers,
             )
             # Checkpoint after every variant so an API/native failure later in
             # the ladder never discards already-completed results.
@@ -173,6 +229,7 @@ def main() -> int:
         client,
         retriever,
         progress_callback=show_progress,
+        max_workers=args.workers,
     )
     write_attack_report(records, metrics, args.output, metadata=metadata)
     write_benchmark_summary(

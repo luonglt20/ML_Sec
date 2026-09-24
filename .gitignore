@@ -258,8 +258,11 @@ eval_results_full_1270_log.txt
 /live_test/
 /scripts/run_live_benchmark.py
 
+# Generated experiment outputs
+/results/
+
 # Local documentation / progress files
 /target-source.md
 /PLAN.md
 /triage-labels.md
-
+.pip-cache

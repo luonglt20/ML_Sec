@@ -90,8 +90,11 @@ def _build_retriever_cached(
         # libomp copies. Prefer the persisted NumPy matrix there to prevent a
         # native abort/segfault at the first search.
         has_numpy_index = (index_path / "vectors.npy").exists()
+        has_faiss_index = (index_path / "index.faiss").exists()
         resolved_backend = (
-            "numpy" if platform.system() == "Darwin" and has_numpy_index else "faiss"
+            "numpy"
+            if has_numpy_index and (platform.system() == "Darwin" or not has_faiss_index)
+            else "faiss"
         )
     if resolved_backend == "numpy":
         vector_index = NumpyFlatIndex.load(index_path)

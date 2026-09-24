@@ -35,4 +35,3 @@ def build_llm_client(
 
     cached = OnDiskLLMCache(inner, cache_dir)
     return LoggingLLMClient(cached)
-

@@ -82,15 +82,15 @@ def tool_extract_medical_entities(text: str) -> Set[str]:
     """Tool 1: Extract medical entities, drugs, pathogens, and acronyms."""
     acronyms = set(re.findall(r"\b[A-Z]{2,}\b", text))
     medical_suffixes = (
-        "itis", "mycin", "micin", "cillin", "penem", "oxacin", "olol", "pine", "pril", 
-        "sartan", "azole", "nazole", "vir", "oma", "carcinoma", "tomy", "ectomy", "cocci", 
+        "itis", "mycin", "micin", "cillin", "penem", "oxacin", "olol", "pine", "pril",
+        "sartan", "azole", "nazole", "vir", "oma", "carcinoma", "tomy", "ectomy", "cocci",
         "bacillus", "statin", "mab", "nib", "tinib", "cycline", "thromycin", "dine",
         "tidine", "prazole", "sone", "solone", "zole"
     )
     medical_terms = {
         "gonorrhoeae", "neisseria", "streptococcus", "staphylococcus", "chlamydia",
         "treponema", "syphilis", "cephalosporin", "fluoroquinolone", "aminoglycoside",
-        "macrolide", "carbapenem", "sulfonamide", "tetracycline", "pneumoniae", 
+        "macrolide", "carbapenem", "sulfonamide", "tetracycline", "pneumoniae",
         "meningitidis", "aureus", "influenzae", "pseudomonas", "enterococcus",
         "gentamicin", "ceftriaxone", "myocardial", "infarction", "hypertension", "diabetes"
     }
@@ -122,7 +122,7 @@ def tool_prune_vignette_noise(question: str) -> str:
     sentences = re.split(r"(?<=[.!?]) +", question.strip())
     pruned = []
     question_patterns = (
-        "which of the following", "what is the", "most likely", 
+        "which of the following", "what is the", "most likely",
         "what should be", "which of these", "is the next step"
     )
     for s in sentences:

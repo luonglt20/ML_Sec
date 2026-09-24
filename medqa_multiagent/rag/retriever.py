@@ -144,7 +144,7 @@ class IndexBackedRetriever:
         pruned_sentences = []
 
         question_patterns = (
-            "which of the following", "what is the", "most likely", 
+            "which of the following", "what is the", "most likely",
             "what should be", "which of these", "is the next step"
         )
 
@@ -223,8 +223,8 @@ class IndexBackedRetriever:
 
         # Common medical suffixes (drugs, conditions, organisms)
         medical_suffixes = (
-            "itis", "mycin", "micin", "cillin", "penem", "oxacin", "olol", "pine", "pril", 
-            "sartan", "azole", "nazole", "vir", "oma", "carcinoma", "tomy", "ectomy", "cocci", 
+            "itis", "mycin", "micin", "cillin", "penem", "oxacin", "olol", "pine", "pril",
+            "sartan", "azole", "nazole", "vir", "oma", "carcinoma", "tomy", "ectomy", "cocci",
             "bacillus", "statin", "mab", "nib", "tinib", "cycline", "thromycin", "dine",
             "tidine", "prazole", "sone", "solone", "zole"
         )
@@ -233,7 +233,7 @@ class IndexBackedRetriever:
         medical_terms = {
             "gonorrhoeae", "neisseria", "streptococcus", "staphylococcus", "chlamydia",
             "treponema", "syphilis", "cephalosporin", "fluoroquinolone", "aminoglycoside",
-            "macrolide", "carbapenem", "sulfonamide", "tetracycline", "pneumoniae", 
+            "macrolide", "carbapenem", "sulfonamide", "tetracycline", "pneumoniae",
             "meningitidis", "aureus", "influenzae", "pseudomonas", "enterococcus",
             "gentamicin", "amikacin", "tobramycin", "vancomycin", "mycoplasma",
             "myocardial", "infarction", "hypertension", "diabetes", "hepatitis",

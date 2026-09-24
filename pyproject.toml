@@ -1,18 +1,15 @@
 [project]
-name = "medqa-multiagent"
+name = "final-luong"
 version = "0.1.0"
-description = "MedQA-USMLE multi-agent evaluation harness (V0-V4 variant ladder)."
+description = "Standalone MedQA prompt-injection attack and defense evaluation (V0-V4)."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]
 ui = ["streamlit>=1.28"]
-rag = ["faiss-cpu>=1.7", "transformers>=4.30", "torch>=2.0", "numpy>=1.25"]
-
-[project.scripts]
-medqa-multiagent = "medqa_multiagent.cli:main"
+rag = ["transformers>=4.30", "torch>=2.0", "numpy>=1.25"]
 
 [build-system]
 requires = ["setuptools>=61.0"]

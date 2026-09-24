@@ -504,5 +504,3 @@ def render_multi_query_prompt(question: str) -> str:
         "Search Query 3: [keywords for pharmacology/treatment]"
     ]
     return "\n".join(lines)
-
-

@@ -1,5 +1,6 @@
 from medqa_multiagent.config import RunConfig
 from medqa_multiagent.data import Question
+from medqa_multiagent.llm_client import LLMResponse
 from medqa_multiagent.rag.retriever import Passage
 from medqa_multiagent.prompt_injection import (
     ATTACK_STRATEGIES,
@@ -12,6 +13,7 @@ from medqa_multiagent.prompt_injection import (
     write_benchmark_summary,
 )
 from tests.fakes import FakeLLMClient, FakeRetriever
+from medqa_multiagent.prompt_defense import guard_question
 
 
 def _config() -> RunConfig:
@@ -32,6 +34,27 @@ def test_all_upstream_attack_shapes_keep_question_and_target():
     assert "Ignore previous instructions" in inject_prompt("Q", "B", "ignore")
     assert "already been answered" in inject_prompt("Q", "B", "fake_completion")
     assert "Ignore previous instructions" in inject_prompt("Q", "B", "combine")
+
+
+def test_line_guard_preserves_clean_stem_and_removes_combine_attack():
+    stem = "A 45-year-old patient has fever. What is the diagnosis?"
+    assert guard_question(stem) == stem
+    assert guard_question(inject_prompt(stem, "B", "combine")) == stem
+    assert guard_question(inject_prompt(stem, "B", "naive")) == stem
+    assert guard_question("The report mentions a final answer, but asks about fever.") == (
+        "The report mentions a final answer, but asks about fever."
+    )
+
+
+def test_guarded_evaluation_records_guard_activity():
+    question = Question("q1", "Clinical stem", {"A": "x", "B": "y"}, "A")
+    client = FakeLLMClient(["Final Answer: A", "Final Answer: A"])
+    records, metrics = evaluate_prompt_injection(
+        [question], "V0", "combine", _config(), client, question_guard=guard_question
+    )
+    assert metrics.attacked_accuracy == 1.0
+    assert not records[0].clean_guard_changed
+    assert records[0].attacked_guard_changed
 
 
 def test_evaluation_runs_paired_calls_and_calculates_metrics():
@@ -140,6 +163,48 @@ def test_progress_callback_receives_running_metrics():
     )
 
     assert updates == [(1, 1, "q1", 1.0)]
+
+
+def test_parallel_evaluation_preserves_question_order_and_paired_metrics():
+    import time
+
+    class DeterministicClient:
+        def complete(self, role, prompt, model, temperature, retrieved_context_id=None):
+            if "Slow" in prompt:
+                time.sleep(0.02)
+            answer = "B" if "Return exactly" in prompt else "A"
+            return LLMResponse(
+                text=f"Final Answer: {answer}",
+                model=model,
+                temperature=temperature,
+                prompt=prompt,
+                role=role,
+                prompt_tokens=10,
+                completion_tokens=2,
+                total_tokens=12,
+                latency_seconds=0.01,
+            )
+
+    questions = [
+        Question("slow", "Slow stem", {"A": "x", "B": "y"}, "A"),
+        Question("fast", "Fast stem", {"A": "x", "B": "y"}, "A"),
+    ]
+    completed = []
+    records, metrics = evaluate_prompt_injection(
+        questions,
+        "V0",
+        "combine",
+        _config(),
+        DeterministicClient(),
+        progress_callback=lambda done, total, record, running: completed.append(record.question_id),
+        max_workers=2,
+    )
+
+    assert completed == ["fast", "slow"]
+    assert [record.question_id for record in records] == ["slow", "fast"]
+    assert metrics.clean_accuracy == 1.0
+    assert metrics.attacked_accuracy == 0.0
+    assert metrics.attack_success_rate == 1.0
 
 
 def test_markdown_summary_contains_comparison_table(tmp_path):

@@ -19,8 +19,6 @@ so importing this module (or anything that transitively imports it, e.g.
 
 from __future__ import annotations
 
-import os
-from threading import Lock
 from typing import List, Protocol, Sequence
 
 #: The two MedCPT encoders (NCBI, biomedical-domain-specific) this project
@@ -48,49 +46,32 @@ class MedCptEmbeddingClient:
     exposes two distinct methods rather than one `embed(text)`.
     """
 
-    def __init__(self, device: str | None = None) -> None:
+    def __init__(self, device: str = "cpu") -> None:
         # Imported lazily -- see module docstring.
         import torch
         from transformers import AutoModel, AutoTokenizer
 
         self._torch = torch
-        # Explicit MEDQA_EMBEDDING_DEVICE wins; otherwise preserve the
-        # historical CPU default.  This lets callers opt into CUDA without
-        # changing the benchmark's default hardware behavior.
-        self._device = device or os.environ.get("MEDQA_EMBEDDING_DEVICE", "cpu")
-        if self._device.startswith("cuda") and not torch.cuda.is_available():
-            raise RuntimeError(
-                f"MEDQA embedding device {self._device!r} was requested, "
-                "but torch.cuda.is_available() is False"
-            )
-        # A single MedCPT model instance is shared by all benchmark workers.
-        # Serialize its GPU forwards: issuing dozens of tiny CUDA forwards
-        # concurrently is unstable under Windows WDDM and can exhaust VRAM.
-        self._encode_lock = Lock()
+        self._device = device
         self._query_tokenizer = AutoTokenizer.from_pretrained(MEDCPT_QUERY_MODEL)
-        self._query_model = (
-            AutoModel.from_pretrained(MEDCPT_QUERY_MODEL).to(self._device).eval()
-        )
+        self._query_model = AutoModel.from_pretrained(MEDCPT_QUERY_MODEL).to(device).eval()
         self._article_tokenizer = AutoTokenizer.from_pretrained(MEDCPT_ARTICLE_MODEL)
-        self._article_model = (
-            AutoModel.from_pretrained(MEDCPT_ARTICLE_MODEL).to(self._device).eval()
-        )
+        self._article_model = AutoModel.from_pretrained(MEDCPT_ARTICLE_MODEL).to(device).eval()
 
     def _encode(self, tokenizer, model, texts: Sequence[str]) -> List[List[float]]:
-        tokenized_inputs = tokenizer(
+        inputs = tokenizer(
             list(texts),
             truncation=True,
             padding=True,
             return_tensors="pt",
             max_length=512,
-        )
-        with self._encode_lock:
-            inputs = tokenized_inputs.to(self._device)
-            with self._torch.no_grad():
-                outputs = model(**inputs)
-            # MedCPT's pooled embedding is the [CLS] token's
-            # last-hidden-state vector, per the MedCPT paper (Jin et al. 2023).
-            return outputs.last_hidden_state[:, 0, :].cpu().numpy().tolist()
+        ).to(self._device)
+        with self._torch.no_grad():
+            outputs = model(**inputs)
+        # MedCPT's pooled embedding is the [CLS] token's last-hidden-state
+        # vector, per the model card / MedCPT paper (Jin et al. 2023).
+        embeddings = outputs.last_hidden_state[:, 0, :]
+        return embeddings.cpu().numpy().tolist()
 
     def embed_query(self, text: str) -> List[float]:
         return self._encode(self._query_tokenizer, self._query_model, [text])[0]

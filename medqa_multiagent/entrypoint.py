@@ -813,8 +813,3 @@ def _answer_question_v4(
             "verifier_omitted": True,
         },
     )
-
-
-
-
-

@@ -46,15 +46,15 @@ st.set_page_config(
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
-    
+
     html, body, [class*="css"] {
         font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     }
-    
+
     /* Background Canvas */
     .stApp {
         background: #0B0F17;
-        background-image: 
+        background-image:
             radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.08) 0px, transparent 50%),
             radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.08) 0px, transparent 50%),
             radial-gradient(at 50% 100%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
@@ -72,14 +72,14 @@ st.markdown("""
         position: relative;
         overflow: hidden;
     }
-    
+
     .app-header-box::before {
         content: '';
         position: absolute;
         top: 0; left: 0; right: 0; height: 3px;
         background: linear-gradient(90deg, #38BDF8, #818CF8, #34D399);
     }
-    
+
     .hero-title {
         font-size: 2.5rem;
         font-weight: 800;
@@ -89,7 +89,7 @@ st.markdown("""
         -webkit-text-fill-color: transparent;
         margin: 0;
     }
-    
+
     .hero-tagline {
         font-size: 1.05rem;
         color: #94A3B8;
@@ -104,7 +104,7 @@ st.markdown("""
         gap: 1.2rem;
         margin-bottom: 1.5rem;
     }
-    
+
     .kpi-card {
         background: rgba(15, 23, 42, 0.6);
         backdrop-filter: blur(16px);
@@ -114,20 +114,20 @@ st.markdown("""
         text-align: center;
         transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    
+
     .kpi-card:hover {
         transform: translateY(-4px);
         border-color: rgba(56, 189, 248, 0.4);
         box-shadow: 0 12px 24px -10px rgba(56, 189, 248, 0.2);
     }
-    
+
     .kpi-val {
         font-size: 2.2rem;
         font-weight: 800;
         letter-spacing: -0.02em;
         line-height: 1.1;
     }
-    
+
     .kpi-lbl {
         font-size: 0.78rem;
         color: #64748B;
@@ -147,13 +147,13 @@ st.markdown("""
         transition: all 0.3s ease;
         height: 100%;
     }
-    
+
     .variant-card-v3 {
         border: 1px solid rgba(52, 211, 153, 0.4);
         background: rgba(6, 78, 59, 0.15);
         box-shadow: 0 0 20px rgba(52, 211, 153, 0.1);
     }
-    
+
     .v-title {
         font-size: 1.1rem;
         font-weight: 800;
@@ -162,7 +162,7 @@ st.markdown("""
         align-items: center;
         justify-content: space-between;
     }
-    
+
     .v-badge-correct {
         background: rgba(16, 185, 129, 0.2);
         color: #34D399;
@@ -172,7 +172,7 @@ st.markdown("""
         font-weight: 700;
         font-size: 0.9rem;
     }
-    
+
     .v-badge-wrong {
         background: rgba(239, 68, 68, 0.2);
         color: #F87171;
@@ -182,7 +182,7 @@ st.markdown("""
         font-weight: 700;
         font-size: 0.9rem;
     }
-    
+
     .meta-pills {
         display: flex;
         gap: 0.6rem;
@@ -190,7 +190,7 @@ st.markdown("""
         font-size: 0.8rem;
         color: #94A3B8;
     }
-    
+
     .meta-pill {
         background: rgba(15, 23, 42, 0.8);
         padding: 4px 10px;
@@ -205,7 +205,7 @@ st.markdown("""
         gap: 1rem;
         margin-top: 1rem;
     }
-    
+
     .flow-step-card {
         background: rgba(15, 23, 42, 0.7);
         border: 1px solid rgba(255, 255, 255, 0.08);

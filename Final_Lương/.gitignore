@@ -1,0 +1,10 @@
+.env
+.venv/
+.cache/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*.log
+.DS_Store
+results/smoke_*.json
+results/smoke_*.md

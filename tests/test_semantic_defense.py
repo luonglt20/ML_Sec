@@ -34,6 +34,12 @@ def test_parse_guard_response_preserves_only_question_field():
         parse_guard_response("Clinical stem", _response('{"question":""}'))
 
 
+def test_parse_guard_response_accepts_unescaped_newline_in_question():
+    response = _response('{"question":"First line\nSecond line"}')
+    result = parse_guard_response("First line\nSecond line", response)
+    assert result.question == "First line\nSecond line"
+
+
 def test_guard_policy_uses_system_role_and_raw_question_uses_user_role(monkeypatch):
     sent = {}
 

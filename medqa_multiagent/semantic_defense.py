@@ -101,9 +101,16 @@ class RoleSeparatedGuardClient:
 
 
 def parse_guard_response(input_text: str, response: LLMResponse) -> GuardResult:
-    """Fail the experiment rather than silently counting an invalid guard call."""
+    """Validate the guard contract, tolerating raw controls in its string value.
+
+    Some OpenAI-compatible providers occasionally emit a literal newline or
+    tab inside the JSON string despite the JSON-only instruction.  Python's
+    ``strict=False`` accepts those control characters while retaining the
+    required one-field schema check below.  This also makes an already-cached
+    response of that form reusable instead of aborting a long evaluation.
+    """
     try:
-        payload = json.loads(response.text.strip())
+        payload = json.loads(response.text.strip(), strict=False)
     except json.JSONDecodeError as exc:
         raise ValueError("semantic guard returned non-JSON output") from exc
     if not isinstance(payload, dict) or set(payload) != {"question"}:

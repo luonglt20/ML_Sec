@@ -1,0 +1,5 @@
+[server]
+# Transformers performs lazy optional imports that Streamlit's file watcher
+# otherwise probes, producing noisy torchvision warnings. Disabling the
+# watcher does not affect API calls; restart Streamlit after source edits.
+fileWatcherType = "none"

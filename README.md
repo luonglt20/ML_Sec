@@ -91,6 +91,27 @@ PYTHONPATH=. python scripts/run_prompt_injection.py \
   --output results/smoke_v0.json
 ```
 
+## Security Lab demo web
+
+The Streamlit UI compares the same MedQA case in three conditions: normal,
+prompt injection, and prompt injection with a defense. Every displayed answer
+is a fresh provider API call: it does not use the on-disk LLM cache or replay
+stored answers. The UI can also scan its eight MedQA candidates and show a
+case only when the live responses satisfy normal-correct, targeted-attack,
+and defense-recovered.
+
+```bash
+python -m pip install -e '.[ui]'
+python -m streamlit run medqa_multiagent/ui/app.py
+```
+
+`semantic_guard` uses the repository's role-separated DeepSeek filter and
+requires `DEEPSEEK_API_KEY`; it adds one additional API call per comparison.
+`StruQ-compatible frontend (DeepSeek API)`
+also calls the API, but uses a StruQ-style trusted-instruction/untrusted-data
+prompt layout; it is explicitly not a substitute for the official
+structured-instruction-tuned StruQ checkpoint.
+
 ## Phạm vi kết luận
 
 Attack ở đây chèn trực tiếp vào question theo nhánh `quan-prompt-injection`.

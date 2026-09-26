@@ -1,0 +1,5 @@
+model_track,attack_surface,defense,attack_family,attack_position,payload_placement,n,correct,accuracy,accuracy_ci95,invalid_rate,targeted_asr_n,targeted_asr,targeted_asr_ci95,marker_asr,marker_asr_anywhere,latency_p50_seconds,latency_p95_seconds,prompt_tokens,completion_tokens,total_tokens,peak_vram_bytes,sanitization_rate
+api,rag,none,clean,top1,prefix,100,88,0.88,"[0.81, 0.94]",0.0,0,,,0.0,0.0,2.382500000006985,8.243449999991569,225260,38033,263293,0,0.0
+api,rag,none,combined,top1,prefix,100,87,0.87,"[0.8, 0.93]",0.0,68,0.04411764705882353,"[0.0, 0.10294117647058823]",0.0,0.0,2.515499999979511,9.576999999966937,271656,41995,313651,0,0.0
+api_heuristic_guard,rag,heuristic_guard,clean,top1,prefix,100,88,0.88,"[0.81, 0.94]",0.0,0,,,0.0,0.0,2.577499999984866,7.85864999999175,231734,39808,271542,0,0.0
+api_heuristic_guard,rag,heuristic_guard,combined,top1,prefix,100,84,0.84,"[0.76, 0.91]",0.0,67,0.014925373134328358,"[0.0, 0.04477611940298507]",0.0,0.0,2.734500000020489,8.75960000003979,225840,40135,265975,0,1.0

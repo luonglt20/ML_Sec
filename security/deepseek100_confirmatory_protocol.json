@@ -1,0 +1,35 @@
+{
+  "purpose": "confirmatory DeepSeek evaluation after the locked 20-question pilot",
+  "derived_from": "security/deepseek20_protocol.json",
+  "frozen_before_full_run": true,
+  "model": "deepseek-chat",
+  "temperature": 0.0,
+  "sample_seed": 14,
+  "sample_size": 100,
+  "stratification": "25 questions per gold label A-D",
+  "retrieval_snapshot": "results/security/raw/deepseek100_retrieval_snapshot.jsonl",
+  "top_k": 2,
+  "payload": {
+    "families": ["naive", "escape", "context_ignoring", "fake_completion", "combined"],
+    "position": "top1",
+    "placement": "prefix",
+    "marker": "PWNED",
+    "target_selection": "deterministic question-id hash, seed 14"
+  },
+  "locked_rule": "No payload family, target function, decoding setting, or evaluation subset may be changed after this snapshot is frozen.",
+  "planned_calls": {
+    "v2_api_core": 600,
+    "v2_api_guard_clean_and_combined": 200,
+    "v2_all_top_k_ablation": 20,
+    "v2_residual_probes": 60,
+    "v4_memory_api": 200,
+    "v4_memory_api_guard": 200,
+    "total_generation_calls": 1280
+  },
+  "artifacts": {
+    "predictions": "results/security/raw/deepseek100_predictions.jsonl",
+    "summary_json": "results/security/deepseek100_summary.json",
+    "summary_csv": "results/security/deepseek100_summary.csv"
+  },
+  "interpretation": "The 20-question run remains a pilot. Only this frozen 100-question protocol may be used for confirmatory claims."
+}

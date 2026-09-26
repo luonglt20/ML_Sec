@@ -1,0 +1,20 @@
+{
+  "purpose": "exploratory high-pressure indirect prompt injection against frozen V4 long-term memory",
+  "status": "locked_before_smoke",
+  "baseline_manifest": "security/midterm_baseline_manifest.json",
+  "model": "deepseek-chat",
+  "temperature": 0.0,
+  "sample_size": 20,
+  "smoke_size": 5,
+  "sample_seed": 14,
+  "snapshot": "results/security/raw/deepseek20_retrieval_snapshot.jsonl",
+  "payload_revision": "opi_medqa_r3",
+  "surface": "memory",
+  "variant": "V4",
+  "conditions": [
+    {"attack_family": "clean", "position": "all_top_k", "placement": "sandwich"},
+    {"attack_family": "dense_authority", "position": "all_top_k", "placement": "sandwich"}
+  ],
+  "threat_model": "Only transient copies of explanations in cases returned from baseline memory retrieval are modified. The memory store, dev data, RAG retrieval, entrypoint, agents, model and workflow remain unchanged.",
+  "locked_rule": "Do not change payload text, repetition count, seed, snapshot or decoding after smoke inspection. A 20-question continuation must use this protocol and a new immutable raw output."
+}

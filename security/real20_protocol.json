@@ -1,0 +1,31 @@
+{
+  "purpose": "real-LLM final-phase evaluation after the five-question smoke test",
+  "frozen_before_full_run": true,
+  "model_track": "ollama_undefended",
+  "model": "ollama/gemma3:4b",
+  "variant": "V2",
+  "attack_surface": "rag",
+  "sample_seed": 14,
+  "sample_size": 20,
+  "retrieval_snapshot": "results/security/raw/real20_retrieval_snapshot.jsonl",
+  "retrieval_snapshot_sha256": "85d152c51e5cf97b5252a3f67c281874180962533f371f2550ed25fb86071821",
+  "attacks": ["clean", "naive", "escape", "context_ignoring", "fake_completion", "combined"],
+  "temperature": 0.0,
+  "top_k": 2,
+  "payload_position": "top1",
+  "payload_placement": "prefix",
+  "marker": "PWNED",
+  "planned_defense_conditions": [
+    {
+      "model_track": "ollama_frontend_only",
+      "attacks": ["clean", "combined"],
+      "label": "structured frontend only; not StruQ"
+    },
+    {
+      "model_track": "ollama_heuristic_guard",
+      "attacks": ["clean", "combined"],
+      "label": "structured frontend plus transparent paragraph-level input guard; not StruQ; Combined is the preregistered strongest defense condition for the constrained local runtime"
+    }
+  ],
+  "note": "The Escape template uses role-boundary tokens within the untrusted passage. This template was fixed before the full 20-question run; the preceding smoke test is not a reportable result."
+}

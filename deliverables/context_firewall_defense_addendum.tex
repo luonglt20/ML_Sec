@@ -1,0 +1,166 @@
+% Insert this section after the existing semantic_guard subsection in the report.
+% Requires the same TikZ packages already used by the report:
+% \usepackage{tikz}
+% \usetikzlibrary{arrows.meta,positioning}
+
+\subsection{Hiệu chỉnh kết quả input guard trên toàn bộ test set}
+\label{subsec:input-guard-correction}
+
+Kết quả benchmark đã chạy của input guard (tên artifact:
+\texttt{heuristic\_suffix\_guard}; trong báo cáo có thể gọi nhất quán là
+\texttt{semantic\_guard} nếu đổi tên cơ chế ở mọi nơi) được trình bày ở
+Bảng~\ref{tab:input_guard_full_results}. Guard nhận diện và loại payload
+\texttt{combine} ở 100\% nhánh attacked của cả năm variant. Tuy nhiên,
+vì clean và attacked được gọi API độc lập và không dùng response cache,
+prediction vẫn có thể khác do biến thiên provider; do đó không nên ghi
+rằng accuracy drop, conditional ASR và flip đều bằng 0\%.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Input guard trên toàn bộ official test set (N=1,273; combine attack).
+Mọi nhánh attacked có input sanitization rate = 100\%.}
+\label{tab:input_guard_full_results}
+\begin{tabular}{lrrrrrr}
+\toprule
+\textbf{Variant} & \textbf{Clean acc.} & \textbf{Attacked acc.} &
+\textbf{Drop} & \textbf{ASR} & \textbf{Cond. ASR} & \textbf{Flip} \\
+\midrule
+V0 & 89.63\% & 88.92\% & 0.71 pp  & 3.77\% & 0.35\% & 2.75\% \\
+V1 & 88.14\% & 87.51\% & 0.63 pp  & 4.16\% & 0.71\% & 2.75\% \\
+V2 & 87.98\% & 88.30\% & -0.31 pp & 4.40\% & 1.96\% & 10.13\% \\
+V3 & 86.88\% & 87.82\% & -0.94 pp & 4.48\% & 1.27\% & 10.29\% \\
+V4 & 90.34\% & 89.32\% & 1.02 pp  & 4.08\% & 1.48\% & 6.68\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Theo đó, input guard có delivery coverage 100\% với payload benchmark,
+nhưng kết quả phải được diễn giải là robustness dưới một template attack
+xác định, không phải chứng minh loại bỏ hoàn toàn mọi prompt injection.
+
+\subsection{Defense 2: Context Firewall cho dữ liệu RAG không tin cậy}
+\label{subsec:context-firewall}
+
+Defense thứ hai được xây dựng trực tiếp từ lớp bảo mật đã có trong repo,
+khác với \texttt{semantic\_guard} đặt tại đầu vào câu hỏi. Cơ chế này bảo vệ
+\emph{dữ liệu không tin cậy sau retrieval}: một passage được truy xuất từ
+corpus có thể chứa chỉ dẫn gián tiếp nhằm thay đổi hành vi của mô hình, dù
+question, đáp án chuẩn, chỉ dẫn hệ thống và thứ hạng retrieval không bị sửa.
+Vì vậy, cơ chế được gọi là \emph{Context Firewall} (CF).
+
+CF được cài đặt trong \texttt{medqa\_multiagent/security/wrappers.py}.
+Sau khi Retriever trả về các passage, \texttt{InjectedRetriever} tạo một
+bản sao chỉ-đọc của text để mô phỏng payload, rồi áp dụng
+\texttt{filter\_suspicious\_untrusted\_data}. Bộ lọc chuẩn hoá Unicode
+NFKC, loại ký tự zero-width, kiểm tra payload Base64 độc lập, và loại cả
+paragraph có mẫu role token, lệnh override/ignore, \texttt{Final Answer},
+\texttt{PWNED}, hoặc delimiter dạng \texttt{[INST]/[INPT]/[RESP]}.
+CF không sinh đáp án y khoa, không thay đổi corpus trên đĩa, passage ID,
+score, thứ tự ranking, gold label, agent hay baseline entrypoint. Do đó đây
+là một engineering guard minh bạch, \textbf{không phải} checkpoint StruQ
+đã structured-instruction-tune.
+
+\begin{figure}[H]
+\centering
+\resizebox{0.98\textwidth}{!}{%
+\begin{tikzpicture}[
+  >=latex,
+  font=\scriptsize,
+  io/.style={draw=gray!75,fill=gray!8,rounded corners=3pt,text width=1.45cm,minimum height=.85cm,align=center,inner sep=3pt,thick},
+  agent/.style={draw=blue!75!black,fill=blue!6,rounded corners=3pt,text width=1.75cm,minimum height=.9cm,align=center,inner sep=3pt,thick},
+  rag/.style={draw=teal!70!black,fill=teal!7,rounded corners=3pt,text width=1.75cm,minimum height=.9cm,align=center,inner sep=3pt,thick},
+  guard/.style={draw=orange!85!black,fill=orange!10,rounded corners=3pt,text width=2.1cm,minimum height=1.1cm,align=center,inner sep=3pt,thick},
+  attack/.style={draw=red!75!black,fill=red!7,rounded corners=3pt,text width=1.8cm,minimum height=.9cm,align=center,inner sep=3pt,thick},
+  note/.style={font=\tiny,align=center,text=black!75}
+]
+\node[io] (q) {MedQA\\question + options};
+\node[agent,right=.4cm of q] (router) {Router\\query formulation};
+\node[rag,right=.4cm of router] (retrieve) {Retriever\\top-$k$ passages};
+\node[attack,below=.85cm of retrieve] (payload) {Indirect injection\\in top-1 passage};
+\node[guard,right=.4cm of retrieve] (guard) {Context Firewall\\normalise $\rightarrow$ detect\\$\rightarrow$ drop paragraph};
+\node[agent,right=.4cm of guard] (pipeline) {V1--V4 pipeline\\Reasoner / Verifier\\/ Memory};
+\node[io,right=.4cm of pipeline] (out) {Final answer\\+ trace};
+
+\draw[->,thick] (q) -- (router);
+\draw[->,thick] (router) -- (retrieve);
+\draw[->,thick,red!75!black,dashed] (payload) -- (retrieve);
+\draw[->,thick] (retrieve) -- (guard);
+\draw[->,thick,orange!85!black] (guard) -- (pipeline);
+\draw[->,thick] (pipeline) -- (out);
+\node[note,below=.22cm of guard] {V0 không có RAG; CF áp dụng cho V1--V4.};
+\end{tikzpicture}%
+}
+\caption{Luồng Context Firewall. Chỉ text của context không tin cậy được
+quan sát và lọc sau retrieval; pipeline y khoa gốc và retrieval ranking giữ
+nguyên.}
+\label{fig:context_firewall_flow}
+\end{figure}
+
+\subsubsection{Giao thức đánh giá}
+
+Để cô lập tác động của CF, thí nghiệm dùng 100 câu stratified từ official
+test set, seed 14, temperature 0 và cùng retrieval snapshot
+\texttt{results/security/raw/pi100\_retrieval\_snapshot.jsonl}. Attack
+\texttt{combined} được chèn vào passage top-1 \emph{sau} retrieval. Mẫu
+số của targeted ASR chỉ gồm những câu mà nhánh clean trả lời đúng và target
+khác gold answer. Vì vậy, CF được so với cùng câu hỏi, cùng snapshot và cùng
+attack surface; đây không phải phép so sánh trực tiếp với benchmark
+\texttt{semantic\_guard} 1.273 câu ở input-level.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Kết quả Context Firewall trên V2/RAG, combined indirect injection
+(N = 100; targeted-ASR denominator được ghi riêng).}
+\label{tab:context_firewall_results}
+\begin{tabular}{lrrrrrr}
+\toprule
+\textbf{Điều kiện} & \textbf{Đúng} & \textbf{Acc.} &
+\textbf{Targeted ASR} & \textbf{ASR n} &
+\textbf{Sanitized} & \textbf{Acc. $\Delta$} \\
+\midrule
+Clean, không CF                  & 88/100 & 88.0\% & --             & --    & 0\%   & -- \\
+Attack, không CF                 & 87/100 & 87.0\% & 3/68 (4.41\%) & 68    & 0\%   & -1.0 pp \\
+Clean, CF                        & 88/100 & 88.0\% & --             & --    & 0\%   & 0.0 pp \\
+Attack, CF                       & 88/100 & 88.0\% & 0/68 (0.00\%) & 68    & 100\% & 0.0 pp \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Trên snapshot này, CF giảm targeted ASR từ 4.41\% xuống 0\% (3 xuống 0
+success trong 68 câu đủ điều kiện), tức giảm tương đối 100\%. Attacked
+accuracy tăng từ 87.0\% lên 88.0\%, bằng clean accuracy của cả hai track.
+Tuy nhiên, kết quả cần được diễn giải thận trọng: N=100, hai track là các
+lần gọi API tách biệt dù dùng cùng snapshot, và CF mới được xác nhận trực
+tiếp ở V2/RAG. Nó là bằng chứng về hành vi của guard ở trust boundary RAG,
+không phải bằng chứng rằng mọi payload hoặc mọi variant đều được bảo vệ
+tuyệt đối.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Phân biệt hai defense trong báo cáo.}
+\label{tab:defense_scope_comparison}
+\begin{tabular}{p{3.0cm}p{3.3cm}p{3.6cm}p{3.2cm}}
+\toprule
+\textbf{Defense} & \textbf{Trust boundary} & \textbf{Phạm vi variant} & \textbf{Bằng chứng hiện có} \\
+\midrule
+\texttt{semantic\_guard} / input suffix guard & Câu hỏi do người dùng gửi trước khi vào pipeline & V0--V4 & Paired \texttt{combine} benchmark, N=1,273 (bảng input-level của báo cáo) \\
+Context Firewall (\texttt{heuristic\_guard}) & Passage RAG hoặc memory explanation sau retrieval & V1--V4 về mặt kiến trúc; V0 không áp dụng & V2/RAG, fixed snapshot, N=100; Bảng~\ref{tab:context_firewall_results} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Giới hạn và tái lập}
+
+CF được thiết kế để loại instruction-shaped paragraph, vì thế không thay
+thế kiểm chứng y khoa, content moderation tổng quát hoặc StruQ model
+training. Các false positive có thể xảy ra nếu tài liệu y khoa hợp lệ chứa
+đúng mẫu delimiter/role token của policy. Các artifact tái lập là
+\texttt{results/security/pi100\_summary.json} (track không defense),
+\texttt{results/security/pi100\_v2\_guard\_summary.json} (track CF), và
+\texttt{results/security/raw/pi100\_retrieval\_snapshot.jsonl}. Để báo cáo
+một claim 1.273 câu cho CF, cần chạy lại một protocol RAG-passage attack
+trên toàn bộ test set với cùng snapshot và đủ API quota; không được ngoại
+suy số liệu N=100 ở đây.

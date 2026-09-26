@@ -1,0 +1,11 @@
+{
+  "baseline_commit": "96dafbc3741d59ce941e0b2c63577fe836dfe5c7",
+  "purpose": "The final security harness must not modify these midterm source files.",
+  "sha256": {
+    "medqa_multiagent/entrypoint.py": "cb95785976ef9fde92f2e8642a2cc5347c9cece7314d4f4eb9936fb895f7f7d0",
+    "medqa_multiagent/agents/memory_agent.py": "409d62dad20cf6fbbca30be8104a00e64256ee852fa595a9a59b38dd217d26a0",
+    "medqa_multiagent/agents/reasoner_agent.py": "0a4a8c60f0bfa344de39fe755ddded42c4459b747b7a31f7ce0d3add837b0ba7",
+    "medqa_multiagent/agents/researcher_agent.py": "c128fe71784b6f719fffb603407f7bbacf39a418b5bcaabd2876848f269bc2be",
+    "medqa_multiagent/agents/verifier_agent.py": "ac2e328837868f2362f7f545f830a4571e12d9488b6174231d43b23d026474c0"
+  }
+}

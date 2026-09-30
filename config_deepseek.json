@@ -1,6 +1,8 @@
 {
   "model": "deepseek-chat",
   "temperature": 0.0,
+  "enable_thinking": false,
+  "reasoning_effort": "high",
   "dev_sample_size": 3,
   "official_test_sample_size": 3,
   "seed": 42,

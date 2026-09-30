@@ -57,6 +57,8 @@ class LLMResponse:
     latency_seconds: float
     retrieved_context_id: Optional[str] = None
     cache_hit: bool = False
+    reasoning_content: Optional[str] = None
+    reasoning_tokens: int = 0
 
 
 class LLMClient(Protocol):
@@ -90,6 +92,9 @@ _PROVIDER_REGISTRY = {
     "deepseek-chat": ProviderConfig(
         base_url="https://api.deepseek.com/v1", api_key_env_var="DEEPSEEK_API_KEY"
     ),
+    "deepseek-v4-flash": ProviderConfig(
+        base_url="https://api.deepseek.com/v1", api_key_env_var="DEEPSEEK_API_KEY"
+    ),
 }
 
 
@@ -106,10 +111,20 @@ class OpenAICompatibleClient:
     differ, which `create_llm_client` supplies from the provider registry.
     """
 
-    def __init__(self, base_url: str, api_key: str, timeout: float = 60.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        timeout: float = 60.0,
+        *,
+        enable_thinking: bool = False,
+        reasoning_effort: str = "high",
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._timeout = timeout
+        self._enable_thinking = enable_thinking
+        self._reasoning_effort = reasoning_effort
 
     def complete(
         self,
@@ -121,9 +136,17 @@ class OpenAICompatibleClient:
     ) -> LLMResponse:
         payload = {
             "model": model,
-            "temperature": temperature,
             "messages": [{"role": "user", "content": prompt}],
         }
+        # DeepSeek thinking mode returns the provider-visible reasoning in a
+        # separate ``reasoning_content`` field. Temperature is unsupported in
+        # this mode, so omit it instead of silently sending an ineffective
+        # parameter.
+        if self._enable_thinking:
+            payload["thinking"] = {"type": "enabled"}
+            payload["reasoning_effort"] = self._reasoning_effort
+        else:
+            payload["temperature"] = temperature
         request = urllib.request.Request(
             f"{self._base_url}/chat/completions",
             data=json.dumps(payload).encode("utf-8"),
@@ -145,8 +168,10 @@ class OpenAICompatibleClient:
             ) from exc
         latency = time.monotonic() - start
 
-        text = body["choices"][0]["message"]["content"]
+        message = body["choices"][0]["message"]
+        text = message["content"]
         usage = body.get("usage", {})
+        completion_details = usage.get("completion_tokens_details", {})
         return LLMResponse(
             text=text,
             model=model,
@@ -158,10 +183,17 @@ class OpenAICompatibleClient:
             total_tokens=usage.get("total_tokens", 0),
             latency_seconds=latency,
             retrieved_context_id=retrieved_context_id,
+            reasoning_content=message.get("reasoning_content"),
+            reasoning_tokens=completion_details.get("reasoning_tokens", 0),
         )
 
 
-def create_llm_client(model: str) -> LLMClient:
+def create_llm_client(
+    model: str,
+    *,
+    enable_thinking: bool = False,
+    reasoning_effort: str = "high",
+) -> LLMClient:
     """Build the `LLMClient` for `model`, via the provider registry.
 
     Selecting between the development configuration (`gpt-4o-mini`, OpenAI)
@@ -187,7 +219,38 @@ def create_llm_client(model: str) -> LLMClient:
             f"Environment variable {provider.api_key_env_var} is not set; "
             f"required to call model {model!r}."
         )
-    return OpenAICompatibleClient(base_url=provider.base_url, api_key=api_key)
+    return OpenAICompatibleClient(
+        base_url=provider.base_url,
+        api_key=api_key,
+        enable_thinking=enable_thinking,
+        reasoning_effort=reasoning_effort,
+    )
+
+
+class TracingLLMClient:
+    """Decorator that retains public provider responses for a single run."""
+
+    def __init__(self, client: LLMClient) -> None:
+        self._client = client
+        self.calls: list[LLMResponse] = []
+
+    def complete(
+        self,
+        role: str,
+        prompt: str,
+        model: str,
+        temperature: float,
+        retrieved_context_id: Optional[str] = None,
+    ) -> LLMResponse:
+        response = self._client.complete(
+            role=role,
+            prompt=prompt,
+            model=model,
+            temperature=temperature,
+            retrieved_context_id=retrieved_context_id,
+        )
+        self.calls.append(response)
+        return response
 
 
 class LoggingLLMClient:

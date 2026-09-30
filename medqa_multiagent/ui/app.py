@@ -9,10 +9,12 @@ Run from the repository root:
 
 from __future__ import annotations
 
+import json
+import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import streamlit as st
 
@@ -24,14 +26,24 @@ from medqa_multiagent.config import RunConfig
 from medqa_multiagent.data import load_questions
 from medqa_multiagent.entrypoint import SUPPORTED_VARIANTS, AnswerResult, answer_question
 from medqa_multiagent.env_file import load_env_file
-from medqa_multiagent.llm_client import LLMClient, create_llm_client
-from medqa_multiagent.semantic_defense import RoleSeparatedGuardClient, parse_guard_response
-from medqa_multiagent.struq_frontend import StruQFrontendAPIClient
-from medqa_multiagent.ui.attack_demo import DemoCase, build_demo_cases
+from medqa_multiagent.llm_client import LLMClient, LLMResponse, TracingLLMClient, create_llm_client
+from medqa_multiagent.semantic_defense import GuardResult, RoleSeparatedGuardClient, parse_guard_response
+from medqa_multiagent.struq_defense import StruQDefender
+from medqa_multiagent.ui.attack_demo import DemoCase, build_demo_cases, high_force_attack_suffix
+from medqa_multiagent.ui.model_options import DEMO_MODELS, MODEL_LABELS, live_model_config
 
 
 load_env_file(str(PROJECT_ROOT / ".env"))
 st.set_page_config(page_title="MedQA Live Security Lab", page_icon="🛡️", layout="wide")
+
+
+TERMINAL_AUDIT_LOGGER = logging.getLogger("medqa_multiagent.ui.audit")
+if not TERMINAL_AUDIT_LOGGER.handlers:
+    _terminal_handler = logging.StreamHandler()
+    _terminal_handler.setFormatter(logging.Formatter("[MEDQA FLOW] %(message)s"))
+    TERMINAL_AUDIT_LOGGER.addHandler(_terminal_handler)
+TERMINAL_AUDIT_LOGGER.setLevel(logging.INFO)
+TERMINAL_AUDIT_LOGGER.propagate = False
 
 
 @dataclass(frozen=True)
@@ -46,6 +58,8 @@ class LiveComparison:
     defense: AnswerResult
     defense_detail: str
     structured_prompt: Optional[str] = None
+    audit_log: Tuple[Dict[str, object], ...] = ()
+    attack_suffix: str = ""
 
 
 def is_live_comparison(value: object) -> bool:
@@ -71,7 +85,7 @@ def load_run_config() -> RunConfig:
     return RunConfig.from_json_file(PROJECT_ROOT / "config_deepseek.json")
 
 
-def semantic_guard(question: str, config: RunConfig) -> str:
+def semantic_guard(question: str, config: RunConfig) -> GuardResult:
     """Call the role-separated semantic guard API; it is never cache-wrapped."""
     response = RoleSeparatedGuardClient().complete(
         role="security_guard",
@@ -79,7 +93,170 @@ def semantic_guard(question: str, config: RunConfig) -> str:
         model=config.model,
         temperature=0.0,
     )
-    return parse_guard_response(question, response).question
+    return parse_guard_response(question, response)
+
+
+def fresh_tracing_client(config: RunConfig) -> TracingLLMClient:
+    """Create one no-cache provider client and retain its public responses."""
+    return TracingLLMClient(
+        create_llm_client(
+            config.model,
+            enable_thinking=config.enable_thinking,
+            reasoning_effort=config.reasoning_effort,
+        )
+    )
+
+
+class FinalBoundaryInjectionClient:
+    """Append untrusted attack text after a pipeline's fully rendered prompt."""
+
+    def __init__(self, inner: LLMClient, suffix: str) -> None:
+        self._inner = inner
+        self._suffix = suffix
+
+    def complete(
+        self,
+        role: str,
+        prompt: str,
+        model: str,
+        temperature: float,
+        retrieved_context_id: Optional[str] = None,
+    ) -> LLMResponse:
+        return self._inner.complete(
+            role=role,
+            prompt=f"{prompt}\n\n{self._suffix}",
+            model=model,
+            temperature=temperature,
+            retrieved_context_id=retrieved_context_id,
+        )
+
+
+def flow_event(
+    step: str,
+    action: str,
+    *,
+    component: str = "System flow",
+    input_text: Optional[str] = None,
+    thinking_text: Optional[str] = None,
+    output_text: Optional[str] = None,
+    trace: Optional[Dict[str, object]] = None,
+) -> Dict[str, object]:
+    """Create a display-only audit record; it is never sent to the model."""
+    event: Dict[str, object] = {"step": step, "action": action, "component": component}
+    if input_text is not None:
+        event["input"] = input_text
+    if thinking_text is not None:
+        event["thinking"] = thinking_text
+    if output_text is not None:
+        event["output"] = output_text
+    if trace:
+        event["trace"] = trace
+    terminal_lines = [f"{step}: {action}"]
+    if input_text is not None:
+        terminal_lines.extend((f"[INPUT — {component}]", input_text))
+    if thinking_text is not None:
+        terminal_lines.extend((
+            f"[THINKING / REASONING_CONTENT — {component}; returned by provider]",
+            thinking_text,
+        ))
+    if output_text is not None:
+        terminal_lines.extend((f"[OUTPUT — {component}]", output_text))
+    if trace:
+        terminal_lines.extend(("AGENT TRACE:", json.dumps(trace, ensure_ascii=False, default=str)))
+    TERMINAL_AUDIT_LOGGER.info("\n".join(terminal_lines))
+    return event
+
+
+def component_label(role: str, model: str) -> str:
+    """Name the concrete pipeline component responsible for an API call."""
+    names = {
+        "direct": "Direct answer classifier",
+        "router": "Router / RAG query classifier",
+        "router_multi_query": "Router multi-query generator",
+        "router_reformulate": "Router query reformulator",
+        "researcher_eval": "RAG researcher relevance evaluator",
+        "researcher_synthesis": "RAG researcher synthesizer",
+        "memory_specialist": "Long-term memory specialist",
+        "reasoner": "Clinical reasoner",
+        "verifier": "Verifier / final-answer auditor",
+        "verifier_review": "Verifier / peer reviewer",
+        "verifier_consensus": "Verifier / consensus decider",
+    }
+    return f"{names.get(role, role)} | model={model}"
+
+
+def provider_call_events(branch: str, calls: Tuple[object, ...] | list[object]) -> list[Dict[str, object]]:
+    """Expose the exact public response fields for every agent API call."""
+    events = []
+    for index, call in enumerate(calls, start=1):
+        reasoning = getattr(call, "reasoning_content", None)
+        reasoning_tokens = getattr(call, "reasoning_tokens", 0)
+        content = getattr(call, "text", "")
+        if reasoning:
+            thinking_note = f"Thinking enabled; API returned {reasoning_tokens} reasoning token(s)."
+        else:
+            thinking_note = "No public reasoning_content was returned by this API call."
+        events.append(
+            flow_event(
+                f"{branch}.{index} API role={getattr(call, 'role', 'unknown')}",
+                thinking_note,
+                component=component_label(
+                    str(getattr(call, "role", "unknown")),
+                    str(getattr(call, "model", "unknown")),
+                ),
+                input_text=getattr(call, "prompt", None),
+                thinking_text=reasoning,
+                output_text=content,
+            )
+        )
+    return events
+
+
+def pipeline_summary(result: AnswerResult) -> str:
+    """Explain the real final-answer path from the result's recorded trace."""
+    trace = result.trace
+    stages = []
+    if "memory_brief" in trace:
+        stages.append(f"Memory: {trace.get('memory_exemplars_count', 'unknown')} exemplar(s) → memory brief")
+    if "router_query" in trace:
+        stages.append(f"Router → query={trace['router_query']!r}")
+    if "retrieved_passages" in trace:
+        stages.append(f"RAG → {len(trace['retrieved_passages'])} passage(s)")
+    if "research_brief" in trace:
+        stages.append("Researcher → research brief")
+    if "reasoner_candidate" in trace:
+        candidate = trace["reasoner_candidate"]
+        if isinstance(candidate, dict):
+            stages.append(f"Reasoner → candidate={candidate.get('answer')!r}")
+    verifier = trace.get("verifier_decision")
+    if isinstance(verifier, dict):
+        stages.append(
+            f"Verifier → {verifier.get('decision')}; final={verifier.get('answer')!r}"
+        )
+    elif trace.get("verifier_omitted"):
+        stages.append(f"Verifier omitted → Reasoner final={result.answer!r}")
+    elif "decision_flow" in trace:
+        stages.append(f"Consensus flow={trace['decision_flow']!r} → final={result.answer!r}")
+    elif not stages:
+        stages.append(f"Direct pipeline → parsed final={result.answer!r}")
+    else:
+        stages.append(f"Pipeline returned parsed final={result.answer!r}")
+    return " | ".join(stages)
+
+
+def result_event(step: str, result: AnswerResult, gold: str) -> Dict[str, object]:
+    """Record the parsed answer and any agent hand-offs for one answer call."""
+    return flow_event(
+        step,
+        (
+            f"Provider API returned `{result.answer or 'invalid'}`; parser valid={result.is_valid}; "
+            f"gold comparison: {verdict(result.answer, gold)}. "
+            f"{result.total_tokens} tokens in {result.latency_seconds:.2f}s. "
+            f"Final-answer path: {pipeline_summary(result)}"
+        ),
+        output_text=result.raw_response,
+        trace=result.trace,
+    )
 
 
 def run_live_comparison(
@@ -94,14 +271,55 @@ def run_live_comparison(
     # create_llm_client returns the raw provider client. Do not replace this
     # with build_llm_client: that function intentionally adds the disk cache.
     attack_input = case.attacked_question
+    attack_suffix = high_force_attack_suffix(case.target_answer)
+    gold = case.question.answer
+    audit_log = [
+        flow_event(
+            "0. Nhận cấu hình demo",
+            (
+                f"Variant={variant}; defense={defense_name}; model={config.model}; "
+                f"thinking={config.enable_thinking}; reasoning_effort={config.reasoning_effort}; "
+                f"temperature={config.temperature}."
+            ),
+        ),
+        flow_event(
+            "1. Normal input → answer pipeline",
+            "Gửi clinical question sạch vào answer_question bằng provider API mới.",
+            input_text=case.question.question,
+        ),
+    ]
+    normal_client = fresh_tracing_client(config)
     normal = answer_question(
         case.question.question, case.question.options, variant, config,
-        create_llm_client(config.model),
+        normal_client,
     )
+    audit_log.extend(provider_call_events("1.0 Normal", normal_client.calls))
+    audit_log.append(result_event("1.1 Normal response → evaluator", normal, gold))
+    audit_log.append(
+        flow_event(
+            "2. Tạo attack input",
+            "Ghép clinical question với payload không tin cậy.",
+            input_text=attack_input,
+        )
+    )
+    audit_log.append(
+        flow_event(
+            "2.1 Final-boundary attack delivery",
+            (
+                "Nhánh Under attack nối untrusted suffix này vào SAU fully-rendered prompt của từng agent call. "
+                "Đây là mô phỏng lỗi prompt assembly mạnh nhất trong demo, không phải local result override."
+            ),
+            component="Untrusted final-boundary injector",
+            input_text=attack_suffix,
+        )
+    )
+    attack_client = fresh_tracing_client(config)
     attack = answer_question(
         attack_input, case.question.options, variant, config,
-        create_llm_client(config.model),
+        FinalBoundaryInjectionClient(attack_client, attack_suffix),
     )
+    audit_log.extend(provider_call_events("2.0 Under attack", attack_client.calls))
+    audit_log.append(result_event("2.1 Attack response → evaluator", attack, gold))
     # During discovery, a defense result cannot satisfy the requested demo
     # pattern unless the clean answer is right and the attack is wrong. Avoid
     # spending a guard/API call for every other candidate.
@@ -113,32 +331,82 @@ def run_live_comparison(
     defended_input = attack_input
     structured_prompt: Optional[str] = None
     defense_detail = ""
-    defense_client: LLMClient = create_llm_client(config.model)
+    defense_api_client = fresh_tracing_client(config)
+    defense_client: LLMClient = defense_api_client
     if defense_name.startswith("semantic"):
-        defended_input = semantic_guard(attack_input, config)
+        audit_log.append(
+            flow_event(
+                "3. semantic_guard input",
+                "Gửi attack input như untrusted data tới guard API; guard không nhận gold label.",
+                component=f"semantic_guard input filter | model={config.model}",
+                input_text=attack_input,
+            )
+        )
+        guard_result = semantic_guard(attack_input, config)
+        defended_input = guard_result.question
         defense_detail = "semantic_guard made a separate API call before the fresh answer API call."
+        audit_log.append(
+            flow_event(
+                "3.1 semantic_guard output",
+                f"Guard trả question đã lọc; {guard_result.total_tokens} tokens in {guard_result.latency_seconds:.2f}s.",
+                component=f"semantic_guard input filter | model={config.model}",
+                output_text=defended_input,
+            )
+        )
     elif defense_name.startswith("StruQ"):
-        struq_client = StruQFrontendAPIClient(
-            create_llm_client(config.model), [attack_input]
+        struq_client = StruQDefender(
+            defense_api_client, [attack_input]
         )
         defense_client = struq_client
         defense_detail = (
-            "StruQ-compatible frontend separated the untrusted question into a data channel; "
+            "StruQ defender separated the untrusted question into a data channel; "
             "the answer still comes from a fresh DeepSeek API call."
+        )
+        audit_log.append(
+            flow_event(
+                "3. StruQ defender (reference frontend)",
+                "Đánh dấu attack input là untrusted data; client sẽ tách instruction/data trước khi gọi API.",
+                input_text=attack_input,
+            )
         )
     else:
         raise ValueError(f"Unsupported defense: {defense_name}")
+    defense = answer_question(
+        defended_input, case.question.options, variant, config, defense_client,
+    )
+    audit_log.extend(provider_call_events("4.0 Attack + defense", defense_api_client.calls))
+    if defense_name.startswith("StruQ"):
+        audit_log.append(
+            flow_event(
+                "3.1 StruQ structured prompt",
+                "Structured prompt thực tế đã gửi tới provider API.",
+                output_text=struq_client.last_structured_prompt,
+            )
+        )
+    audit_log.append(result_event("4. Defense response → evaluator", defense, gold))
+    desired = normal.answer == gold and attack.answer != gold and defense.answer == gold
+    audit_log.append(
+        flow_event(
+            "5. Quy tắc hiển thị kết quả",
+            (
+                "UI luôn hiển thị đủ 3 thẻ của cùng question_id. Mỗi thẻ là Correct/Wrong khi "
+                "parsed answer được so với gold label. Banner pattern chỉ là success khi "
+                "Normal đúng ∧ Attack sai ∧ Defense đúng: "
+                f"{desired}."
+            ),
+        )
+    )
     return LiveComparison(
         case=case,
         defense_name=defense_name,
         defended_input=defended_input,
         normal=normal,
         attack=attack,
-        defense=answer_question(
-            defended_input, case.question.options, variant, config, defense_client,
-        ),
+        defense=defense,
         defense_detail=defense_detail,
         structured_prompt=struq_client.last_structured_prompt if defense_name.startswith("StruQ") else None,
+        audit_log=tuple(audit_log),
+        attack_suffix=attack_suffix,
     )
 
 
@@ -161,6 +429,36 @@ def render_result(title: str, result: AnswerResult, gold: str) -> None:
         st.metric("Agent answer", result.answer or "invalid")
         (st.success if result.answer == gold else st.error)(verdict(result.answer, gold))
         st.caption(api_detail(result))
+
+
+def render_audit_log(comparison: LiveComparison) -> None:
+    """Render the exact UI-side flow used for this live comparison."""
+    events = getattr(comparison, "audit_log", ())
+    with st.expander("Xem flow xử lý và audit log", expanded=True):
+        if not events:
+            st.info("Lượt chạy này chưa có audit log chi tiết. Hãy chạy lại ca để tạo log mới.")
+            return
+        st.caption(
+            "Log chỉ mô tả dữ liệu và quyết định của lượt chạy này; không chứa API key và không được gửi lại vào model."
+        )
+        for event in events:
+            st.markdown(f"**{event['step']}**")
+            st.write(event["action"])
+            if "input" in event:
+                st.caption(f"[INPUT — {event['component']}]")
+                st.code(event["input"], language=None)
+            if "thinking" in event:
+                st.caption(
+                    f"[THINKING / REASONING_CONTENT — {event['component']}; returned by provider]"
+                )
+                st.code(event["thinking"], language=None)
+            if "output" in event:
+                st.caption(f"[OUTPUT — {event['component']}]")
+                st.code(event["output"], language=None)
+            if "trace" in event:
+                st.caption("Agent trace")
+                st.json(event["trace"])
+            st.divider()
 
 
 def is_desired_demo(comparison: LiveComparison) -> bool:
@@ -197,8 +495,33 @@ if pending_candidate_index is not None:
 st.title("MedQA Live Security Lab")
 st.caption("Normal, prompt injection, và defense đều gọi provider API mới. Không dùng replay hoặc LLM cache trên đĩa.")
 
+try:
+    base_config = load_run_config()
+except Exception as exc:
+    st.error(f"Không đọc được config_deepseek.json: {exc}")
+    st.stop()
+
 with st.sidebar:
     st.header("Thiết lập live run")
+    initial_model_index = (
+        DEMO_MODELS.index(base_config.model)
+        if base_config.model in DEMO_MODELS
+        else 0
+    )
+    selected_model = st.selectbox(
+        "API model",
+        DEMO_MODELS,
+        index=initial_model_index,
+        format_func=lambda model: MODEL_LABELS[model],
+        key="model_selection",
+        on_change=clear_live_result,
+    )
+    if selected_model == "deepseek-v4-flash":
+        st.caption(
+            "Thinking đang bật. Audit log sẽ hiển thị `reasoning_content` do DeepSeek trả về."
+        )
+    else:
+        st.caption("Thinking tắt cho DeepSeek Chat.")
     variant = st.selectbox(
         "Agent variant", SUPPORTED_VARIANTS, index=0,
         key="variant_selection", on_change=reset_case_after_variant_change,
@@ -207,14 +530,15 @@ with st.sidebar:
         "Defense",
         (
             "semantic_guard (DeepSeek)",
-            "StruQ-compatible frontend (DeepSeek API)",
+            "StruQ defender (reference frontend · DeepSeek API)",
         ),
         key="defense_selection",
         on_change=clear_live_result,
     )
     if defense_name.startswith("StruQ"):
         st.caption(
-            "API-only structural frontend. Không phải checkpoint StruQ Mistral được fine-tune."
+            "Frontend STRUQ từ repo tham chiếu. Với DeepSeek API đây là frontend-only; "
+            "không phải checkpoint StruQ Mistral đã fine-tune."
         )
     else:
         st.caption("`semantic_guard` thêm một API call trước khi gửi answer request tới model.")
@@ -272,6 +596,7 @@ with right:
     st.subheader("Attack payload (untrusted input)")
     st.code(case.attacked_question, language=None)
     st.caption(f"Gold evaluation label: {question.answer} · Target injection: {case.target_answer}")
+    st.caption("Under attack còn nối payload mạnh ở cuối fully-rendered prompt; xem chi tiết trong audit log.")
 
 run_selected_case = st.button(
     "Chạy 3 điều kiện cho ca đang chọn",
@@ -282,11 +607,7 @@ run_selected_case = st.button(
 # its trigger in the demo UI.
 find_real_demo = False
 
-try:
-    config = load_run_config()
-except Exception as exc:
-    st.error(f"Không đọc được config_deepseek.json: {exc}")
-    st.stop()
+config = live_model_config(base_config, selected_model)
 
 last_scan = st.session_state.get("last_scan")
 if last_scan:
@@ -389,7 +710,7 @@ if (
     and comparison.case.question.question_id == case.question.question_id
 ):
     if comparison.defense_name.startswith("StruQ"):
-        st.success("StruQ-compatible frontend đã tách untrusted question khỏi instruction channel.")
+        st.success("StruQ defender đã tách untrusted question khỏi instruction channel.")
     elif comparison.case.attacked_question != comparison.defended_input:
         st.success(f"Guard đã thay đổi input trước inference ({comparison.defense_name}).")
     else:
@@ -406,9 +727,10 @@ if (
         st.success("Pattern demo đã được xác nhận bằng API: đúng → attack sai → khôi phục đúng.")
     else:
         st.info("Kết quả này không đạt pattern demo và sẽ không được giữ sau lần quét mới.")
+    render_audit_log(comparison)
     with st.expander("Xem input sau khi guard xử lý"):
         st.code(comparison.defended_input, language=None)
     if comparison.structured_prompt:
-        with st.expander("Xem StruQ-compatible structured prompt gửi tới API"):
+        with st.expander("Xem structured prompt của StruQ defender gửi tới API"):
             st.code(comparison.structured_prompt, language=None)
             st.caption(comparison.defense_detail)

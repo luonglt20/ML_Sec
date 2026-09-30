@@ -58,8 +58,8 @@ class RoleSeparatedGuardClient:
         temperature: float,
         retrieved_context_id: str | None = None,
     ) -> LLMResponse:
-        if model != "deepseek-chat":
-            raise ValueError("semantic_guard currently supports deepseek-chat only")
+        if not model.startswith("deepseek-"):
+            raise ValueError("semantic_guard requires a DeepSeek chat-completions model")
         payload = {
             "model": model,
             "temperature": temperature,

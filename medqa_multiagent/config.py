@@ -97,6 +97,8 @@ class RunConfig:
     rag_use_synonym_expansion: bool = False
     rag_use_mmr: bool = False
     rag_mmr_lambda: float = 0.7
+    enable_thinking: bool = False
+    reasoning_effort: str = "high"
 
 
     def __post_init__(self) -> None:
@@ -136,6 +138,8 @@ class RunConfig:
             raise ValueError("rag_relevance_threshold must be non-negative")
         if self.rag_max_retrieval_loops <= 0:
             raise ValueError("rag_max_retrieval_loops must be a positive integer")
+        if self.reasoning_effort not in {"low", "high", "max"}:
+            raise ValueError("reasoning_effort must be one of: low, high, max")
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> "RunConfig":
